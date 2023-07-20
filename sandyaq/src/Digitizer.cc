@@ -44,7 +44,7 @@ Digitizer::Digitizer(std::string& sConfigFile, CommonConfig_t &CommonConfig, con
 
         std::vector<uint32_t> iDCOffsets;
         std::vector<uint32_t> iTriggerThresholds;
-        std::vector<CAEN_DGTZ_TriggerMode_t> sTriggerSettings;
+        std::map<uint32_t,CAEN_DGTZ_TriggerMode_t> sTriggerSettings;
         std::vector<uint32_t> iPulsePolarity;
         for (const uint32_t ch : m_iOpenChannels[i]) {
             std::string sBoardChannel = sBoardCategory+"_CHANNEL-"+std::to_string(ch);
@@ -57,7 +57,8 @@ Digitizer::Digitizer(std::string& sConfigFile, CommonConfig_t &CommonConfig, con
             iTriggerThresholds.push_back(iTrigThresh);
 
             std::string sTrigSet = r.Get<std::string>(sBoardChannel, "CHANNEL_TRIGGER");
-            sTriggerSettings.push_back(TriggerModeMap[sTrigSet]);
+            // sTriggerSettings.push_back(TriggerModeMap[sTrigSet]);
+            sTriggerSettings[ch] = TriggerModeMap[sTrigSet];
 
             iPulsePolarity.push_back(r.Get<uint32_t>(sBoardChannel, "PULSE_POLARITY"));
         }

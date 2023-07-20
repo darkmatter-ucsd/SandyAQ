@@ -103,38 +103,42 @@ int V1725::ProgramDefault(int BoardNum) {
         PrintError(BoardNum, "Setting", "ChannelTriggerThreshold", ret);
     }
 
+    std::cout << "Size of channel trigger settings: " << m_sChannelTriggerSetting[BoardNum].size() << "\n";
     //Special pair settings for the V1725/30
-    // for (int c = 0; c < m_iNChannels[BoardNum]; c+=2) {
-    //     if (m_iEnableMask[BoardNum] & (0x3<<c)) { //If either channel c or channel c+1 is enabled
-    //         CAEN_DGTZ_TriggerMode_t modes[2];
-    //         CAEN_DGTZ_TriggerMode_t couple_mode;
-    //         uint32_t pair_chmask = 0;
+    for (int c = 0; c < m_iNChannels[BoardNum]; c+=2) {
+        if (m_iEnableMask[BoardNum] & (0x3<<c)) { //If either channel c or channel c+1 is enabled
+            std::cout << "Channel " << c << " or " << c+1 << " is enabled\n";
+            CAEN_DGTZ_TriggerMode_t modes[2];
+            CAEN_DGTZ_TriggerMode_t couple_mode;
+            uint32_t pair_chmask = 0;
+            
 
-    //         for (int j = 0; j < 2; j++){
-    //             if ((m_iEnableMask[BoardNum] & (1<<(c+j)))>>(c+j)) modes[j] = m_sChannelTriggerSetting[BoardNum][c+j];
-    //             else modes[j] = CAEN_DGTZ_TRGMODE_DISABLED;
-    //         }
 
-    //         if (modes[0] != CAEN_DGTZ_TRGMODE_DISABLED) {
-    //             if (modes[1] == CAEN_DGTZ_TRGMODE_DISABLED)
-    //                 pair_chmask = (0x1 << c);
-    //             else
-    //                 pair_chmask = (0x3 << c);
+            for (int j = 0; j < 2; j++){
+                if ((m_iEnableMask[BoardNum] & (1<<(c+j)))>>(c+j)) modes[j] = m_sChannelTriggerSetting[BoardNum][c+j];
+                else modes[j] = CAEN_DGTZ_TRGMODE_DISABLED;
+            }
+
+            if (modes[0] != CAEN_DGTZ_TRGMODE_DISABLED) {
+                if (modes[1] == CAEN_DGTZ_TRGMODE_DISABLED)
+                    pair_chmask = (0x1 << c);
+                else
+                    pair_chmask = (0x3 << c);
                 
-    //             couple_mode = modes[0];
-    //         }
-    //         else{
-    //             couple_mode = modes[1];
-    //             pair_chmask = (0x2 << c);
-    //         }
+                couple_mode = modes[0];
+            }
+            else{
+                couple_mode = modes[1];
+                pair_chmask = (0x2 << c);
+            }
 
-    //         pair_chmask &= m_iEnableMask[BoardNum];
+            pair_chmask &= m_iEnableMask[BoardNum];
 
-    //         ret |= CAEN_DGTZ_SetChannelSelfTrigger(handle, couple_mode, pair_chmask);
-    //         PrintError(BoardNum, "Setting", "ChannelSelfTriggerMode", ret);
+            ret |= CAEN_DGTZ_SetChannelSelfTrigger(handle, couple_mode, pair_chmask);
+            PrintError(BoardNum, "Setting", "ChannelSelfTriggerMode", ret);
 
-    //     }
-    // }
+        }
+    }
 
     //Read the Register for the Trigger
     uint32_t global_trigger_reg_data, fpio_reg_data, lvds_reg_data, acq_ctrl_reg_data, board_config_reg_data;

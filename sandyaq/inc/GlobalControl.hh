@@ -32,6 +32,7 @@ static int SetSyncMode(std::vector<Digitizer*> &Boards, CommonConfig_t* commonCo
     for (int bt = 0; bt<Boards.size(); bt++) {
         totalBoards+=Boards[bt]->m_iNBoards;
     }
+    printf("\n\nTotal boards: %d\n\n", totalBoards);
 
     for (int bt = 0; bt<Boards.size(); bt++){
         Digitizer* boards = Boards[bt];
@@ -57,20 +58,25 @@ static int SetSyncMode(std::vector<Digitizer*> &Boards, CommonConfig_t* commonCo
                 ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], ADDR_RUN_DELAY, 4*(totalBoards-1-totalBoardIndex));   // Run Delay decreases with the position (to compensate for run the propagation delay)        }
                 std::cout << "Run delay of "<< 4*(totalBoards-1-totalBoardIndex)<<"\n";
                 PrintError(b, "Writng", "Register[ADDR_RUN_DELAY]", ret);
-                continue;        
+                // continue;        
             }
             else if (commonConfig->SyncMode == "INDIVIDUAL_TRIGGER_SIN_TRGOUT"){
-
+                printf("\n\nTotal board index: %d\n\n", totalBoardIndex);
                 if (totalBoardIndex == totalBoards - 1){ // Run starts with S-IN on the last board
                     ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], ADDR_ACQUISITION_MODE, RUN_START_ON_SIN_LEVEL);
+                    uint32_t acquisition_mode_register_data;
+                    ret |= CAEN_DGTZ_ReadRegister(boards->m_iHandles[b], ADDR_ACQUISITION_MODE, &acquisition_mode_register_data);
                     PrintError(b, "Writng", "Register[ADDR_ACQUISITION_MODE]", ret);
-
+                    printf("Board %d starts on SIN level, register: %u\n", totalBoardIndex, acquisition_mode_register_data);
                 }
                 // for (int c = 0; c < m_iOpenChannels[i].size(); c++){
                 //     ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], ADDR_GLOBAL_TRG_MASK, 0x40000000 + (1<<(int)m_iOpenChannels[i][c]));  //  accept EXT TRGIN or trg from selected channel
                 //     PrintError(i, "Writng", "Register[ADDR_GLOBAL_TRG_MASK]", ret);
 
                 // }
+                uint32_t global_trg_mask_reg; 
+                ret |= CAEN_DGTZ_ReadRegister(boards->m_iHandles[b], ADDR_GLOBAL_TRG_MASK, &global_trg_mask_reg);
+                printf("Global trigger mask register: %u\n", global_trg_mask_reg);
 
                 //Keep in mind, if we do INDIVIDUAL_TRIGGER_SIN_TRGOUT, then we need to overwrite any propagation of trgout
                 ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], ADDR_TRG_OUT_MASK, 0); // no trigger propagation to TRGOUT
@@ -86,7 +92,7 @@ static int SetSyncMode(std::vector<Digitizer*> &Boards, CommonConfig_t* commonCo
                 reg = reg & 0xFFF0FFFF | 0x00010000;
                 ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], ADDR_FRONT_PANEL_IO_SET, reg);
                 PrintError(b, "Writng", "Register[ADDR_FRONT_PANEL_IO_SET]", ret);
-                continue;
+                // continue;
             }
             else if (commonConfig->SyncMode == "TRIGGER_ONE2ALL_EXTOR") {
                 // for (int c = 0; c < m_iOpenChannels[i].size(); c++){    
@@ -107,7 +113,7 @@ static int SetSyncMode(std::vector<Digitizer*> &Boards, CommonConfig_t* commonCo
                 
                 ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], ADDR_RUN_DELAY, 0);   // Run Delay due to the transmission of the SW TRG in the TRGIN of the slaves
                 
-                continue;
+                // continue;
             }
             else{
                 return -1;

@@ -60,7 +60,8 @@ class Digitizer {
         //Channel settings
         std::vector<std::vector<uint32_t>> m_iChannelDCOffset;
         std::vector<std::vector<uint32_t>> m_iTriggerThresholds;
-        std::vector<std::vector<CAEN_DGTZ_TriggerMode_t>> m_sChannelTriggerSetting;
+        // std::vector<std::vector<CAEN_DGTZ_TriggerMode_t>> m_sChannelTriggerSetting;
+        std::vector<std::map<uint32_t, CAEN_DGTZ_TriggerMode_t>> m_sChannelTriggerSetting;
         std::vector<std::vector<uint32_t>> m_iPulsePolarity;
 
         //CAEN Returned info
