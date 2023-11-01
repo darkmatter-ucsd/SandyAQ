@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
         PrevRateTime[i] = get_time();
     }
     
-    while(iNumEventsAcquired[0] < 1000){
+    while(iNumEventsAcquired[0] < 100){
         iTotBoardIndex = 0;
         for (Digitizer* dgtz : digitizers) {
             for (int i = 0; i < dgtz->m_iNBoards; i++){

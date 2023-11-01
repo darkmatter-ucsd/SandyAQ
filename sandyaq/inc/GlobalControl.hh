@@ -115,6 +115,37 @@ static int SetSyncMode(std::vector<Digitizer*> &Boards, CommonConfig_t* commonCo
                 
                 // continue;
             }
+            else if (commonConfig->SyncMode == "LVDS_SYNC") {
+                //This one write register is pretty complicated, let's summarize it:
+                //  1) Enables LVDS couple 0-3 as input
+                //  2) Enables LVDS couple 4-7 as output
+                //  3) TRG OUT propagates motherboard signals (bits [17:16])
+                //  4) Signal that is propagated is busy (bits[19:18])
+                //  5) Use extended trigger time stamp (BECAUSE WHY WOULD YOU NOT USE IT??? SERIOUSLY, USE IT!!!)
+                ret |= CAEN_DGTZ_ReadRegister(boards->m_iHandles[b], 0x811C, &reg);
+                ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x811C, reg | 0x4d0138);
+
+                //Set start with either software or LVDS
+                ret |= CAEN_DGTZ_ReadRegister(boards->m_iHandles[b], 0x8100, &reg);
+                if ((b == 0)&&(bt == 0)){
+                    ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x8100, reg | (0x00000100));
+                }
+			    else {
+                    ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x8100, reg | (0x00000107));
+                }
+
+                //BUSY signal is raised by having some set number of buffers (set at 0x816C) being full
+                //0x800C is the number of buffers (set by programming the record length)
+                ret |= CAEN_DGTZ_ReadRegister(boards->m_iHandles[b], 0x800C, &reg);
+                ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x816C, (uint32_t)(pow(2., reg) - 10));
+
+                //Timestamp offset
+                ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x8170, 3 * (totalBoards - 1 - totalBoardIndex) + (totalBoardIndex == 0 ? -1 : 0));
+
+                // register 0x81A0: select the lowest two quartet as "nBUSY/nVETO" type. BEWARE: set ALL the quartet bits to 2
+                ret |= CAEN_DGTZ_ReadRegister(boards->m_iHandles[b], 0x81A0, &reg);
+                ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x81A0, reg | 0x00002222);
+            }
             else{
                 return -1;
             }
@@ -156,7 +187,7 @@ static int StartRun(std::vector<Digitizer*> &Boards, CommonConfig_t* commonConfi
         }
         return ret;
     }
-    if(commonConfig->SyncMode == "INDIVIDUAL_TRIGGER_SIN_TRGOUT"){
+    else if(commonConfig->SyncMode == "INDIVIDUAL_TRIGGER_SIN_TRGOUT"){
         if(commonConfig->StartMode == "START_SW_CONTROLLED"){
             ret |= CAEN_DGTZ_WriteRegister(masterBoard->m_iHandles[0], ADDR_ACQUISITION_MODE, 0x4);
             PrintError(0, "Writng", "Register[ADDR_ACQUISITION_MODE]", ret);
@@ -168,6 +199,9 @@ static int StartRun(std::vector<Digitizer*> &Boards, CommonConfig_t* commonConfi
             printf("Run starts/stops on the S-IN high/low level\n");
         }
         return ret;
+    }
+    else if (commonConfig->SyncMode == "LVDS_SYNC") {
+        //
     }
     return ret;
 };

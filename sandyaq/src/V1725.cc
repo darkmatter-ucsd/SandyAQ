@@ -30,16 +30,10 @@ int V1725::ProgramDigitizers() {
 
 void V1725::Quit() {
     for (int i = 0; i < m_iNBoards; i++) {
-         /* stop the acquisition */
-        // CAEN_DGTZ_SWStopAcquisition(m_iHandles[i]);
-        /* close the device and free the buffers */
-        // if(Event8[i])    CAEN_DGTZ_FreeEvent(handle[i], (void**)&Event8[i]);
-        // if(Event16[i])    CAEN_DGTZ_FreeEvent(handle[i], (void**)&Event16[i]);
-        // CAEN_DGTZ_FreeReadoutBuffer(&buffer[i]);
-        /* close connection to boards */
         CAEN_DGTZ_CloseDigitizer(m_iHandles[i]);
     }
 }
+
 
 //Default Wavedump
 int V1725::ProgramDefault(int BoardNum) {
@@ -76,11 +70,6 @@ int V1725::ProgramDefault(int BoardNum) {
     
     //Set ExtTriggerInputMode
     //TODO: add Veto mode
-    // CAEN_DGTZ_TriggerMode_t TrigMode = CAEN_DGTZ_TRGMODE_ACQ_ONLY;
-    // if(m_iExternalTriggerEnabled[BoardNum] == "DISABLED"){TrigMode = CAEN_DGTZ_TRGMODE_DISABLED;}
-    // else if(m_iExternalTriggerEnabled[BoardNum] == "ACQUISITION_ONLY"){TrigMode = CAEN_DGTZ_TRGMODE_ACQ_ONLY;}
-    // else if(m_iExternalTriggerEnabled[BoardNum] == "ACQUISITION_AND_TRGOUT"){TrigMode = CAEN_DGTZ_TRGMODE_ACQ_AND_EXTOUT;}
-    // ret |= CAEN_DGTZ_SetExtTriggerInputMode(handle, TrigMode);
     ret |= CAEN_DGTZ_SetExtTriggerInputMode(handle, m_iExternalTriggerEnabled[BoardNum]);
     PrintError(BoardNum, "Setting", "ExtTriggerInputMode", ret);
 
@@ -184,10 +173,6 @@ int V1725::ProgramDefault(int BoardNum) {
     return ret;
 };
 
+int V1725::ProgramDAW(int BoardNum) {
 
-
-// int V1725::StopRun(int *handle){
-    
-// }
-//DAW
-int V1725::ProgramDAW(int BoardNum) {};
+};
