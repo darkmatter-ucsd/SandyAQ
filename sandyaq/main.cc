@@ -13,14 +13,22 @@ int main(int argc, char* argv[]) {
     int c = 0;
     int ret = 0;
     bool bConfigFileExists = false;
+    int iNEventsTotal = 100;
     std::string sConfigFile;
+    std::string sOutputFile;
 
-    while ((c = getopt(argc, argv, "c:")) != -1){
+    while ((c = getopt(argc, argv, "c:n:f:")) != -1){
         switch (c){
             case 'c':
                 bConfigFileExists = true;
                 sConfigFile.assign(optarg);
                 std::cout << "Configuration file: " << sConfigFile << '\n';
+                break;
+            case 'n':
+                iNEventsTotal = atoi(optarg);
+                break;
+            case 'f':
+                sOutputFile.assign(optarg);
                 break;
             default:
                 break;
@@ -106,7 +114,7 @@ int main(int argc, char* argv[]) {
     //set the output file
     FILE* event_file[iNTotBoards] = {NULL};
     for (int i = 0; i < iNTotBoards; i++){
-        std::string eventFileName = "PMT_test_events_" + std::to_string(i) + ".bin";
+        std::string eventFileName = sOutputFile + std::to_string(i) + ".bin";
         event_file[i] = fopen(eventFileName.c_str(), "w");
     }
     
@@ -123,7 +131,7 @@ int main(int argc, char* argv[]) {
         PrevRateTime[i] = get_time();
     }
     
-    while(iNumEventsAcquired[0] < 100){
+    while(iNumEventsAcquired[0] < iNEventsTotal){
         iTotBoardIndex = 0;
         for (Digitizer* dgtz : digitizers) {
             for (int i = 0; i < dgtz->m_iNBoards; i++){
@@ -158,7 +166,6 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    printf("Have you gotten here?\n");
     StopRun(digitizers, &config);
 
     for (int i = 0; i < iNTotBoards; i++){
