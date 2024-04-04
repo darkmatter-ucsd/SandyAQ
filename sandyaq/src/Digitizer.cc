@@ -34,7 +34,7 @@ Digitizer::Digitizer(std::string& sConfigFile, CommonConfig_t &CommonConfig, con
         m_iLinkValues.push_back(iLinkValues);
         m_iOpenChannels.push_back(r.GetVector<uint32_t>(sBoardCategory, "CHANNEL_LIST"));
         m_iCoincidences[i] = r.Get<uint32_t>(sBoardCategory, "COINCIDENCE");
-        // m_iPulsePolarity[i] = r.Get<uint32_t>(sBoardCategory, "PULSE_POLARITY");
+       // m_iPulsePolarity[i] = r.Get<uint32_t>(sBoardCategory, "PULSE_POLARITY");
         m_iETTT[i] = r.Get<uint32_t>(sBoardCategory, "EXTENDED_TTT");
         std::string ExtTrgMode = r.Get<std::string>(sBoardCategory, "EXTERNAL_TRIGGER");
         m_iExternalTriggerEnabled.push_back(TriggerModeMap[ExtTrgMode]);
@@ -114,7 +114,7 @@ int Digitizer::OpenDigitizers() {
         ret = CAEN_DGTZ_OpenDigitizer(iLinkType, m_iLinkValues[BoardNum][0], m_iLinkValues[BoardNum][1], m_iLinkValues[BoardNum][2], &handle);
         m_iHandles[BoardNum] = handle;
         if (ret) {
-            std::cout << "ERROR: Can't open digitizer " << BoardNum << std::endl;
+            std::cout << "ERROR: Can't open digitizer " << BoardNum << "return code: "  << ret << std::endl;
             Quit();
         }
 

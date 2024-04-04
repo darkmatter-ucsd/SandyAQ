@@ -91,7 +91,8 @@ static int CheckBoardFailureStatus(int handle, CAEN_DGTZ_BoardInfo_t BoardInfo) 
 }
 
 static void PrintError(int BoardNum, const char* Action, const char* Quantity, int ret) {
-    if (ret) std::cout << "Error in "<<Action<<" the "<<Quantity<<" for board " << BoardNum << "\n";
+    if (ret) std::cout << "Return code: " << ret << "   Error in "<<Action<<" the "<<Quantity<<" for board " << BoardNum << "\n" ;
+    //else std::cout << "Successfully "<<Action<<" the "<<Quantity<<" for board " << BoardNum << "\n" ;
 }
 
 /* Get time in milliseconds from the computer internal clock */

@@ -79,14 +79,17 @@ int V1725::ProgramDefault(int BoardNum) {
     for (int c = 0; c < m_iOpenChannels[BoardNum].size(); c++){
         int ch = m_iOpenChannels[BoardNum][c];
         CAEN_DGTZ_TriggerPolarity_t TriggerPolarity;
+
         if (m_iPulsePolarity[BoardNum][c] == 1) {TriggerPolarity = CAEN_DGTZ_TriggerOnRisingEdge;} //Rising edge for pos pulse
         else {TriggerPolarity = CAEN_DGTZ_TriggerOnFallingEdge;} //Falling edge for neg pulse
 
         ret |= CAEN_DGTZ_SetChannelDCOffset(handle, ch, m_iChannelDCOffset[BoardNum][c]);
         PrintError(BoardNum, "Setting", "ChannelDCOffset", ret);
+        // std::cout << "this channel is " << ch << "\n";
 
         ret |= CAEN_DGTZ_SetTriggerPolarity(handle, ch, TriggerPolarity);
         PrintError(BoardNum, "Setting", "ChannelTriggerPolarity", ret);
+        
 
         ret |= CAEN_DGTZ_SetChannelTriggerThreshold(handle, ch, m_iTriggerThresholds[BoardNum][c]);
         PrintError(BoardNum, "Setting", "ChannelTriggerThreshold", ret);
@@ -96,7 +99,7 @@ int V1725::ProgramDefault(int BoardNum) {
     //Special pair settings for the V1725/30
     for (int c = 0; c < m_iNChannels[BoardNum]; c+=2) {
         if (m_iEnableMask[BoardNum] & (0x3<<c)) { //If either channel c or channel c+1 is enabled
-            std::cout << "Channel " << c << " or " << c+1 << " is enabled\n";
+            std::cout << "Channel " << c << " or " << c+1 << " is enabled\n" << "for board " << BoardNum << "\n";
             CAEN_DGTZ_TriggerMode_t modes[2];
             CAEN_DGTZ_TriggerMode_t couple_mode;
             uint32_t pair_chmask = 0;
