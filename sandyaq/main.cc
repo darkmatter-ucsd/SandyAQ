@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
     std::string sConfigFile;
     std::string sDataDir;
     std::string sFileName;
-    str::string sDataFullPath;
+    std::string sDataFullPath;
 
     while ((option = getopt(argc, argv, "c:n:d:f:")) != -1){
         switch (option){
@@ -33,11 +33,9 @@ int main(int argc, char* argv[]) {
                 std::cout << "Number of events: " << iNEvts << '\n';
                 break;
             case 'd':
-                std::cout << "Directory to save data: " << optarg << '\n';
                 sDataDir.assign(optarg);
                 break;
             case 'f':
-                std::cout << "File name: " << optarg << '\n';
                 sFileName.assign(optarg);
                 break;
             default:
@@ -55,14 +53,18 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    # Print the full path of the data file
-    sDataFullPath = sDataDir + "/" + sFileName;
-    std::cout << "Data file path: " << sDataFullPath << std::endl;
+    // Print the full path of the data file
+    if(sDataDir.size() > 0 && sFileName.size() > 0){
+        sDataFullPath = sDataDir + "/" + sFileName;
+        std::cout << "Data file: " << sDataFullPath << std::endl;
+    }
+
 
     inih::INIReader r{ sConfigFile };
-    
+
     CommonConfig_t config;
     ParseCommonConfig(sConfigFile, config);
+
 
     std::map<std::string, int> boardTypeCount;
     std::vector<std::string> boardTypes;
@@ -140,9 +142,13 @@ int main(int argc, char* argv[]) {
     //the output file is set for each board
     //each file contains all the channels of the board
 
+
+    
+
+
     FILE* event_file[iNTotBoards] = {NULL};
     for (int i = 0; i < iNTotBoards; i++){
-        std::string eventFileName = "SiPM_test_events_" + std::to_string(i) + ".bin";
+        std::string eventFileName = sDataFullPath + "_board_" + std::to_string(i) + ".bin";
         std::cout << "Output file: " << eventFileName << '\n';
         event_file[i] = fopen(eventFileName.c_str(), "w");
     }
@@ -193,7 +199,7 @@ int main(int argc, char* argv[]) {
                 CurrentTime = get_time();
                 ElapsedTime[iTotBoardIndex] = CurrentTime - PrevRateTime[iTotBoardIndex];
 
-                // print the trigger rate every 200 ms
+                // print the trigger rate every 1s
                 if (ElapsedTime[iTotBoardIndex] > 1000) {
                     if (Nb[iTotBoardIndex] == 0)
                         if (ret == CAEN_DGTZ_Timeout) printf ("Timeout...\n"); else printf("No data from board %d\n", iTotBoardIndex);
