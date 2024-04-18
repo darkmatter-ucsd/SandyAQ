@@ -1,2 +1,5 @@
 data/
 sandyaq/build
+processor_config/
+.vscode/
+.venv/
