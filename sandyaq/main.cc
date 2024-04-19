@@ -45,11 +45,11 @@ int main(int argc, char* argv[]) {
 
 
 	if (!bConfigFileExists) {
-		std::cout << "ERROR: No config file" << std::endl;
+		std::cout << "ERROR: Missing config file, use -c to set it"  << std::endl;
 		exit(EXIT_FAILURE);
 	}
     if (iNEvts == 0) {
-        std::cout << "ERROR: No number of events set" << std::endl;
+        std::cout << "ERROR: Missing number of events set, use -n to set it" << std::endl;
         exit(EXIT_FAILURE);
     }
 
