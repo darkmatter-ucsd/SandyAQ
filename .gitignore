@@ -3,3 +3,6 @@ sandyaq/build
 processor_config/
 .vscode/
 .venv/
+__pycache__/
+*.pyc
+python_wrappers/test_output/
