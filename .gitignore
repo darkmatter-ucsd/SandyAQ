@@ -6,3 +6,4 @@ processor_config/
 __pycache__/
 *.pyc
 python_wrappers/test_output/
+python_wrappers/notebooks/test_output/

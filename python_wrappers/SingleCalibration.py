@@ -10,9 +10,10 @@ import configparser
 import datetime
 import json
 from copy import deepcopy
+from tqdm import tqdm
 
 class SingleCalibration:
-    def __init__(self, data_taking_settings, config_template_path = "../sandyaq/config/config_template.ini"):
+    def __init__(self, data_taking_settings, config_template_path = "/home/daqtest/DAQ/SandyAQ/sandyaq/config/config_template.ini"):
         # check if the data_taking_settings is a dictionary, and have all of the required keys
         if not isinstance(data_taking_settings, dict):
             raise ValueError("data_taking_settings should be a dictionary")
@@ -84,7 +85,7 @@ class SingleCalibration:
         return tmp_config_files
     
     def run(self, dry_run = False):
-        for tmp_config_file in self.tmp_config_files:
+        for tmp_config_file in tqdm(self.tmp_config_files):
             # -c: config file
             # -n: number of events
             # -d: output folder
@@ -95,6 +96,10 @@ class SingleCalibration:
             # get the current timestamp, and add it to the file name
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             data_file_name = f"{data_file_name}_{timestamp}"
+            meta_file_name = os.path.join(self.data_taking_settings["output_folder"], f"meta_{data_file_name}.json")
+
+            with open(meta_file_name, "w") as f:
+                json.dump(self.data_taking_settings, f)
 
 
             # run sandyaq to take data
@@ -110,10 +115,7 @@ class SingleCalibration:
                     print(f"Error running sandyaq: {e}")
             else:
                 print(f"Running sandyaq -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {self.data_taking_settings['output_folder']} -f {data_file_name}")
-            meta_file_name = os.path.join(self.data_taking_settings["output_folder"], f"meta_{data_file_name}.json")
-
-            with open(meta_file_name, "w") as f:
-                json.dump(self.data_taking_settings, f)
+            
         
         
 
