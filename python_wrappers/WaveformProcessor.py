@@ -21,23 +21,35 @@ class WFProcessor(object):
         self.polarity = polarity
         self.wfs = None
 
-    def set_data(self,data):
+    def set_data(self,data, in_adc = True):
         """
         Load data from a numpy array
+        Supposed to be in ADC counts
         """
         self.wfs = data
         self.event_number = len(self.wfs)
         self.time = np.arange(0, self.length_per_event, 1) * 4
+        if in_adc:
+            self.raw_data_unit = "ADC"
+        else:
+            self.raw_data_unit = "V"
 
     def process_wfs(self,baseline_front=(0.1,0.3),baseline_back=(0.7,0.9),cutoff=10e6,fs=250e6):
         baseline_start_f = int(self.length_per_event * baseline_front[0])
         baseline_end_f = int(self.length_per_event * baseline_front[1])
         baseline_start_b = int(self.length_per_event * baseline_back[0])
         baseline_end_b = int(self.length_per_event * baseline_back[1])
+
+        # baseline is calculated with raw waveform
+        # unit: same as raw waveform
         self.baseline = (np.mean(self.wfs[:,baseline_start_f:baseline_end_f],axis=1) + np.mean(self.wfs[:,baseline_start_b:baseline_end_b],axis=1))/2
         self.baseline_rms = np.std(self.wfs[:,baseline_start_f:baseline_end_f],axis=1)
         baseline = self.baseline.repeat(self.length_per_event).reshape(self.event_number,self.length_per_event)
-        self.processed_wfs = (self.wfs - baseline)*self.volt_per_adc
+        self.processed_wfs = (self.wfs - baseline)
+        if self.raw_data_unit == "ADC":
+            self.processed_wfs *= self.volt_per_adc
+
+        # filtered waveform is in V
         self.filtered_wfs = butter_lowpass_filter(self.processed_wfs,cutoff,fs)
 
     def plot_single_wf(self,i,filtered=True):
@@ -47,7 +59,7 @@ class WFProcessor(object):
             plt.xlabel("Time [ns]")
             plt.ylabel("Voltage [V]")
             plt.xticks(np.arange(0, 4000, step=200))
-            plt.ylim(-0.01,0.02)
+            plt.ylim(-0.01,0.04)
             plt.xlim(0,3950)
         else:
             plt.plot(self.wfs[i])
@@ -90,6 +102,10 @@ class WFProcessor(object):
         plt.xlim(1800,2200)
 
     def get_area(self,sum_window=(0.4,0.6)):
+        """
+        Return the area of the waveform in the sum window
+        Unit: mV * ns
+        """
         sum_start = int(self.length_per_event * sum_window[0])
         sum_end = int(self.length_per_event * sum_window[1])
         self.areas = np.sum(self.filtered_wfs[:,sum_start:sum_end],axis=1) # unit: mV
@@ -97,3 +113,16 @@ class WFProcessor(object):
         if not self.polarity:
             self.areas = -self.areas
         return self.areas
+    
+    def get_height(self, search_window =(0,4,0.6)):
+        """
+        Return the height of the waveform in the search window
+        Unit: mV
+        """
+        sum_start = int(self.length_per_event * search_window[0])
+        sum_end = int(self.length_per_event * search_window[1])
+        self.heights = np.max(self.filtered_wfs[:,sum_start:sum_end],axis=1) # unit: mV
+        self.heights *= 1000 # now it becomes mV 
+        if not self.polarity:
+            self.heights = -self.heights
+        return self.heights
