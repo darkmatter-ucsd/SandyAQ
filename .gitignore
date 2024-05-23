@@ -8,4 +8,4 @@ __pycache__/
 python_wrappers/test_output/
 python_wrappers/notebooks/test_output/
 *.png
-softlink_to_data/
+softlink_to_data
