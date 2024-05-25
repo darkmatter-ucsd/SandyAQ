@@ -1,6 +1,7 @@
 """
 This wrapper is used to take single channel calibration data. It does the following steps:
 - Generate temporary config files based on the config template and user inputs (data_taking_settings)
+- run calibration runs with sandyaq
 - run sandyaq to take data according to the temp config file
 - write the user inputs as metadata 
 """
@@ -30,13 +31,6 @@ class SingleCalibration:
         # check if the data_taking_settings is a dictionary, and have all of the required keys
         if not isinstance(data_taking_settings, dict):
             raise ValueError("data_taking_settings should be a dictionary")
-        # if not all(key in data_taking_settings for key in ["channel_threshold_dict",
-        #                                                    "number_of_events",
-        #                                                    "output_folder", 
-        #                                                    "voltage_config", 
-        #                                                    "temperature"]):
-        # raise ValueError("data_taking_settings should have all of the required keys: \
-        #                      channel_threshold_dict, number_of_events, output_folder, voltage_config, temperature")
         
         if not all(key in data_taking_settings for key in ["number_of_events",
                                                            "output_folder", 
@@ -45,6 +39,10 @@ class SingleCalibration:
             raise ValueError("data_taking_settings should have all of the required keys: \
                               number_of_events, output_folder, voltage_config, temperature")
         self.data_taking_settings = data_taking_settings
+
+        # calibration settings
+        self.n_calibration_events = 3000
+        self.calibration_start_index = 1000 # cannot be lower than this
 
         # check if the config_template is a string and exists
         if not isinstance(config_template_path, str):
@@ -73,8 +71,9 @@ class SingleCalibration:
             # set a very low threshold for all channels, to take noise data
             data_settings = self.data_taking_settings.copy()
             data_settings["channel_threshold_dict"] = {0:2305,1:2269,2:2395,3:2209,4:2378,5:2274,6:2386,7:2516,8:2627,9:2316,10:2162,11:2166,12:2456,13:2456,14:2413,15:2192,16:2230,17:2468,18:2158,19:2090,20:2342,21:2258,22:2313,23:2266}
-            data_settings["number_of_events"] = 1500
+            data_settings["number_of_events"] = self.n_calibration_events
             data_settings["output_folder"] = data_settings["output_folder"] + "/threshold_calibration"
+
         else:
             data_settings = self.data_taking_settings
         
@@ -168,10 +167,8 @@ class SingleCalibration:
             with open(meta_file_name, "w") as f:
                 json.dump(self.data_taking_settings, f)
 
-
             # run sandyaq to take data
             # the executable is in: /home/daqtest/DAQ/SandyAQ/sandyaq/build
-
             run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ/sandyaq/build/sandyaq"
 
             if not dry_run:
@@ -190,13 +187,13 @@ class SingleCalibration:
 
         # Sort the file paths based on the extracted date and time in ascending order (oldest to newest)
         new_meta_data_list = sorted(meta_data_list, key=util.extract_date_meta_data)
-        meta_data_list=new_meta_data_list[-24:]
+        meta_data_list=new_meta_data_list[-24:] # 24 = total number of channels
 
         # Check if all calibration runs are successful
         # by checking if the timestamps are the same
         datetime_list = util.v_extract_date_meta_data(meta_data_list)
         if not np.all(datetime_list == datetime_list[0]):
-            raise ValueError("Not all calibration runs are successful: \nthe last 24 calibration runs don't have the same timestamps. \nCheck the data. Exiting.")
+            raise ValueError("Not all calibration runs are successful: \n the 24 channels (or last 24 data) don't have the same timestamps. \nCheck the data. Exiting.")
         
         # Sort the meta data according to channel number
         sorted_meta_data_list = sorted(meta_data_list, key=util.extract_channel_meta_data)
@@ -235,13 +232,12 @@ class SingleCalibration:
             processor= sandpro.processing.rawdata.RawData(config_file = "process_config.json",
                                                 perchannel=False)
             data_file_basename = meta_data_basename.replace("meta_", "").replace(".json", f"_board_{board_number}.bin")
-            n_evts = self.data_taking_settings["number_of_events"]
             try:
-                data = processor.get_rawdata_numpy(n_evts=n_evts-1,
+                data = processor.get_rawdata_numpy(n_evts=self.n_calibration_events-1,
                                             file=os.path.join(data_folder, data_file_basename),
                                             bit_of_daq=14,
                                             headersize=4,inversion=False)
-                start_index, end_index = 500, n_evts-1-500
+                start_index, end_index = self.calibration_start_index, self.n_calibration_events-1-500
             except Exception as e:
                 print(e)
                 data = processor.get_rawdata_numpy(n_evts=200,
