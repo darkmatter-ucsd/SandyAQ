@@ -114,7 +114,7 @@ class SingleCalibration:
             new_config.set(section_name, 'TRIGGER_THRESHOLD', f'{data_settings["channel_threshold_dict"][channel]}')
             new_config.set(section_name, 'CHANNEL_TRIGGER', 'ACQUISITION_ONLY')
             new_config.set(section_name, 'PULSE_POLARITY', '1')
-            new_config.set(section_name, 'N_EVENTS', f'{data_settings["number_of_events"]}')
+            # new_config.set(section_name, 'N_EVENTS', f'{data_settings["number_of_events"]}')
 
             # write the new config to a file. The file name is the channel number and the threshold
             with open(new_config_path, "w") as f:
@@ -137,9 +137,28 @@ class SingleCalibration:
         self.tmp_config_files = self.generate_temp_configs(calibration=False)
 
     def run(self, dry_run = False, calibration = False):
+
+
         
         # get the current timestamp, and add it to the file name
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        start_timestamp = datetime.datetime.now()
+        timestamp = start_timestamp.strftime("%Y%m%d_%H%M%S")
+
+        if calibration:
+            base_path = os.path.join(self.data_taking_settings["output_folder"], "threshold_calibration")
+            # meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
+        else:
+            base_path = self.data_taking_settings["output_folder"]
+            # meta_file_name = os.path.join(self.data_taking_settings["output_folder"], f"meta_{data_file_name}.json")
+        
+
+        runtime_csv_file = os.path.join(base_path, f"runtime_all_channel.csv")
+        with open(runtime_csv_file, "w") as f:
+                f.write("channel,elapsed_time\n")
+
+        # run sandyaq to take data
+        # the executable is in: /home/daqtest/DAQ/SandyAQ/sandyaq/build
+        run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ/sandyaq/build/sandyaq"
 
         for tmp_config_file in tqdm(self.tmp_config_files):
             # -c: config file
@@ -147,30 +166,16 @@ class SingleCalibration:
             # -d: output folder
             # -f: file name
 
+            parts = tmp_config_file.split('/')[-1].split('_')
+            channel = int(parts[1])
+
             # extract the file name from the tmp config file
             data_file_name = os.path.basename(tmp_config_file).replace(".ini", "")
             # get the current timestamp, and add it to the file name
             # moved this out of the loop: so that all channel from the same run has the same timestamp
             # timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             data_file_name = f"{data_file_name}_{timestamp}"
-
-            if calibration:
-                base_path = os.path.join(self.data_taking_settings["output_folder"], "threshold_calibration")
-                # meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
-            else:
-                base_path = self.data_taking_settings["output_folder"]
-                # meta_file_name = os.path.join(self.data_taking_settings["output_folder"], f"meta_{data_file_name}.json")
-                
-
-            meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
-
-            with open(meta_file_name, "w") as f:
-                json.dump(self.data_taking_settings, f)
-
-            # run sandyaq to take data
-            # the executable is in: /home/daqtest/DAQ/SandyAQ/sandyaq/build
-            run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ/sandyaq/build/sandyaq"
-
+            
             if not dry_run:
                 try:
                     print(f"Taking data with config file: {tmp_config_file}")
@@ -179,7 +184,21 @@ class SingleCalibration:
                     print(f"Error running sandyaq: {e}")
             else:
                 print(f"Running sandyaq -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
- 
+        
+            end_timestamp = datetime.datetime.now()
+
+            meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
+
+            with open(meta_file_name, "w") as f:
+                self.data_taking_settings["runtime"] = str(end_timestamp- start_timestamp)
+                json.dump(self.data_taking_settings, f)
+
+            with open(runtime_csv_file, "a") as f:
+                f.write(f"{channel},{(end_timestamp- start_timestamp).total_seconds()}\n")
+
+                
+        return 
+
     def get_adc_threshold_from_calibration(self):
         # read the data from the calibration run
         data_folder = os.path.join(self.data_taking_settings["output_folder"],"threshold_calibration")
@@ -258,7 +277,7 @@ class SingleCalibration:
         baseline_mean_array = np.array(baseline_mean_array)
         baseline_std_array = np.array(baseline_std_array)
         # threshold_mV = (baseline_mean_array + 2 * (2 * np.sqrt(2) * baseline_std_array)) * 1000
-        threshold_mV = (baseline_mean_array + 3 * baseline_std_array) * 1000
+        threshold_mV = (baseline_mean_array + 4 * baseline_std_array) * 1000
         threshold_adc = util.v_mv_to_adc(threshold_mV)
         
         threshold_dict = {i:int(thres) for i, thres in enumerate(threshold_adc.astype(int))}
