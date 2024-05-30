@@ -18,7 +18,7 @@ sys.path.insert(0,"/home/daqtest/Processor/sandpro")
 import sandpro
 
 #### To do:
-# Write into a pandas dataframe
+# More comments and documentation
 
 class scalar_processed_data:
     def __init__(self):
@@ -63,12 +63,12 @@ class scalar_processed_data:
                 "n_processed_events": self.n_processed_events, 
                 "baseline_mean": self.baseline_mean, 
                 "baseline_std": self.baseline_std, 
-                "threshold_adc": self.threshold_adc, 
+                "threshold_adc": int(self.threshold_adc), 
                 "areas": self.areas, 
                 "heights": self.heights, 
                 "randomly_selected_raw_WF": self.randomly_selected_raw_WF, 
                 "randomly_selected_filtered_WF": self.randomly_selected_filtered_WF}
-
+    
 class PostProcessing:
     def __init__(self,
                  data_folder, # path to the data folder 
@@ -87,13 +87,42 @@ class PostProcessing:
                                           "baseline_mean", "baseline_std", "threshold_adc", 
                                           "areas", "heights", "randomly_selected_raw_WF", 
                                           "randomly_selected_filtered_WF"]) 
-        
+        # self.df = pd.DataFrame({"timestamp_str":pd.Series([], dtype='str'), 
+        #                         "datetime_obj":pd.Series([], dtype='object'), 
+        #                         "channel":pd.Series([], dtype='int'),
+        #                         "bias_voltage":pd.Series([], dtype='float'),
+        #                         "n_events":pd.Series([], dtype='int'),
+        #                         "integral_window":pd.Series([], dtype='float'),
+        #                         "process_config":pd.Series([], dtype='str'),
+        #                         "start_index":pd.Series([], dtype='int'),
+        #                         "end_index":pd.Series([], dtype='int'),
+        #                         "n_processed_events":pd.Series([], dtype='int'),
+        #                         "baseline_mean":pd.Series([], dtype='float'),
+        #                         "baseline_std":pd.Series([], dtype='float'),
+        #                         "threshold_adc":pd.Series([], dtype='int'),
+        #                         "areas":pd.Series([], dtype='float'),
+        #                         "heights":pd.Series([], dtype='float'),
+        #                         "randomly_selected_raw_WF":pd.Series([], dtype='object'),
+        #                         "randomly_selected_filtered_WF":pd.Series([], dtype='object')}) 
+                
         #plot settings
         self.fontsize = "small"  
         
         
     def process_run(self, make_plot=False, show_plot=False):
-        return self._process_run(self, self.list_of_files, make_plot, show_plot)
+        self._process_run(self, self.list_of_files, make_plot, show_plot)
+        return 
+    
+    def plot_waveforms(self, show_plot = True, save_plot = False):
+        if(len(self.df) == 0):
+            print("No data to plot. Run process_run first.")
+            return
+        
+        for i in range(len(self.df)):
+            self._scalar_plot_waveforms(spd = self.df.iloc[i], 
+                                        show_plot = show_plot, 
+                                        save_plot = save_plot)
+        return
 
     def _scalar_process_run(self, meta_data, make_plot = False, show_plot = False):
 
@@ -169,7 +198,6 @@ class PostProcessing:
                                         file=os.path.join(self.data_folder, data_file_basename),
                                         bit_of_daq=14,
                                         headersize=4,inversion=False)
-            # start_index, end_index = 1500, 1980
             spd.start_index, spd.end_index = 1000, spd.n_events-1-500 #first 1000 events are noisy
             print(f"analysing events from range: {spd.start_index} to {spd.end_index}")
         except Exception as e:
@@ -204,6 +232,7 @@ class PostProcessing:
 
         self.df.loc[len(self.df)] = spd.convert_to_dict()
 
+
         if make_plot:
             self._scalar_plot_waveforms(self, spd, show_plot = show_plot)
 
@@ -211,7 +240,10 @@ class PostProcessing:
 
     _process_run = np.vectorize(_scalar_process_run, excluded=['make_plot', 'show_plot'])
 
-    def _scalar_plot_waveforms(self, spd, show_plot = False):
+    def _scalar_plot_waveforms(self, spd, show_plot = True, save_plot = False):
+
+        if not show_plot and not save_plot:
+            raise ValueError("Cannot have both show_plot and save_plot as False")
 
         threshold_mv = util.adc_to_mv(int(spd.threshold_adc))
         # set the threshold to be 2 * Vpp
@@ -289,95 +321,87 @@ class PostProcessing:
         axes[0,1].set_title(f"Filtered WFs channel {spd.channel}")
 
 
-        if not self.calibration_run:
-            ##########finding the peak, and the specifit range###############
-            hist_diff = np.diff(hist)  # Compute differences between consecutive histogram bins
-            peaks = np.where((hist_diff[:-1] > 0) & (hist_diff[1:] < 0))[0] + 1  # Find indices where difference changes sign
+        # if not self.calibration_run:
+        #     ##########finding the peak, and the specifit range###############
+        #     hist_diff = np.diff(hist)  # Compute differences between consecutive histogram bins
+        #     peaks = np.where((hist_diff[:-1] > 0) & (hist_diff[1:] < 0))[0] + 1  # Find indices where difference changes sign
 
-            peak_indices = []
-            hist_index=[]
-            for peak_index in peaks:
-                peak_indices.append(peak_index)
-                hist_index.append(hist[peak_index])
-                #axes[2, 0].plot(bin_edges[peak_index], hist[peak_index], marker='o', color='blue', markersize=8, label='Peak')
+        #     peak_indices = []
+        #     hist_index=[]
+        #     for peak_index in peaks:
+        #         peak_indices.append(peak_index)
+        #         hist_index.append(hist[peak_index])
+        #         #axes[2, 0].plot(bin_edges[peak_index], hist[peak_index], marker='o', color='blue', markersize=8, label='Peak')
 
 
-            edge1 = (bin_edges[peak_indices[0]]+bin_edges[peak_indices[1]])/2
-            edge2 = (bin_edges[peak_indices[1]]+bin_edges[peak_indices[2]])/2
-            edge3 = (bin_edges[peak_indices[2]]+bin_edges[peak_indices[3]])/2
-            edge=[edge1,edge2,edge3]
+        #     edge1 = (bin_edges[peak_indices[0]]+bin_edges[peak_indices[1]])/2
+        #     edge2 = (bin_edges[peak_indices[1]]+bin_edges[peak_indices[2]])/2
+        #     edge3 = (bin_edges[peak_indices[2]]+bin_edges[peak_indices[3]])/2
+        #     edge=[edge1,edge2,edge3]
         
             
-            bin_width = bin_edges[1] - bin_edges[0]
+        #     bin_width = bin_edges[1] - bin_edges[0]
 
-            for k in edge:
-                bin_index = int((k- bin_edges[0]) / bin_width)
-                corresponding_count = hist[bin_index]
-                axes[2,0].plot(k, corresponding_count, marker='o', color='blue', markersize=6, label='Peak')
+        #     for k in edge:
+        #         bin_index = int((k- bin_edges[0]) / bin_width)
+        #         corresponding_count = hist[bin_index]
+        #         axes[2,0].plot(k, corresponding_count, marker='o', color='blue', markersize=6, label='Peak')
             
         
         
-            ##########adding the gaussian fit###############
-            # Define the range of the specific part of the data you want to use for fitting
-            pe=[]
-            for j in range(len(edge)-1):
-                specific_part_range = (edge[j],edge[j+1])
-                specific_part_areas = [area for area in spd.areas if specific_part_range[0] <= area <= specific_part_range[1]]
-                mu, sigma = scipy.stats.norm.fit(specific_part_areas)
-                bins=np.linspace(-0.1, 10, 201)
-                bins_subset = bins[(bins >= specific_part_range [0]) & (bins <= specific_part_range [1])]
+        #     ##########adding the gaussian fit###############
+        #     # Define the range of the specific part of the data you want to use for fitting
+        #     pe=[]
+        #     for j in range(len(edge)-1):
+        #         specific_part_range = (edge[j],edge[j+1])
+        #         specific_part_areas = [area for area in spd.areas if specific_part_range[0] <= area <= specific_part_range[1]]
+        #         mu, sigma = scipy.stats.norm.fit(specific_part_areas)
+        #         bins=np.linspace(-0.1, 10, 201)
+        #         bins_subset = bins[(bins >= specific_part_range [0]) & (bins <= specific_part_range [1])]
                 
-                axes[2, 0].plot(bins_subset, scipy.stats.norm.pdf(bins_subset, mu, sigma), color='green', label='Gaussian Fit')
+        #         axes[2, 0].plot(bins_subset, scipy.stats.norm.pdf(bins_subset, mu, sigma), color='green', label='Gaussian Fit')
 
-                min_y, max_y = axes[2, 0].get_ylim()
-                axes[2, 0].vlines(mu, min_y, max_y, color='green', label='Gaussian Fit')
+        #         min_y, max_y = axes[2, 0].get_ylim()
+        #         axes[2, 0].vlines(mu, min_y, max_y, color='green', label='Gaussian Fit')
 
-                pe.append(mu) # this line has the information of pe1 and pe2 for the gaussian fit
+        #         pe.append(mu) # this line has the information of pe1 and pe2 for the gaussian fit
 
-            ############ normalize it################
-            # specific_hist, specific_bin_edges = np.histogram(specific_part_areas, bins=200, range=(edge1, edge2))
+        #     ############ normalize it################
+        #     # specific_hist, specific_bin_edges = np.histogram(specific_part_areas, bins=200, range=(edge1, edge2))
 
         
-            # norm=np.sqrt(sum([i**2 for i in specific_part_areas]))
-            # normalized=specific_hist/norm
+        #     # norm=np.sqrt(sum([i**2 for i in specific_part_areas]))
+        #     # normalized=specific_hist/norm
 
-            # bin_width = specific_part_areas[1] - specific_part_areas[0]
+        #     # bin_width = specific_part_areas[1] - specific_part_areas[0]
 
-            # # Create the bar plot for the histogram
-            # axes[2,0].bar(edge2, specific_hist, width=bin_width, edgecolor='black', alpha=0.7)
+        #     # # Create the bar plot for the histogram
+        #     # axes[2,0].bar(edge2, specific_hist, width=bin_width, edgecolor='black', alpha=0.7)
         
-            #################################################################################################
+        #     #################################################################################################
         
-            # mu_all_channel.append(pe)
+        #     # mu_all_channel.append(pe)
 
 
         figure_path = os.path.join(self.data_folder,"plot/")
         if not os.path.exists(figure_path):
                 os.makedirs(figure_path)
 
-        plt.legend(fontsize="small")
-        plt.savefig(os.path.join(figure_path,f"plot_{spd.channel}_{spd.timestamp_str}.png"))
+        plt.legend(self.fontsize)
+        if save_plot:
+            plt.savefig(os.path.join(figure_path,f"plot_{spd.channel}_{spd.timestamp_str}.png"))
         
         if show_plot:
             plt.show()
-      
-    _plot_wafefroms = np.vectorize(_scalar_plot_waveforms,excluded=['self','show_plot'])
 
-    # def plot_sand(self, data_file, output_dir):
-    #     # Load the data
-    #     data = np.load(data_file)
-    #     self.sand.load_data(data)
-        
-    #     # Plot the sand
-    #     self.sand.plot_sand(output_dir)
-        
-    # def plot_sand_vs_waveforms_vs_time_vs_position(self, data_file, output_dir):
-    #     # Load the data
-    #     data = np.load(data_file)
-    #     self.wp.load_data(data)
-    #     self.sand.load_data(data)
-        
-    #     # Plot the sand vs waveforms vs time vs position
-    #     self.sand.plot_sand_vs_waveforms_vs_time_vs_position(self.wp, output_dir)
-        
-    # def plot_sand_vs_waveforms_vs_time_vs_position_vs_energy(self, data_file, output_dir):
+        return
+      
+
+    def fit_histograms(self, data_file, output_dir):
+        # Load the data
+        data = np.load(data_file)
+        self.spd.load_data(data)
+
+        # Fit the histograms
+        self.spd.fit_histograms(output_dir)
+
