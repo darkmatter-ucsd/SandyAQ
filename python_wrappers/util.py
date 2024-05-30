@@ -31,7 +31,7 @@ def extract_channel_meta_data(meta_data_path):
 
 v_extract_channel_meta_data = np.vectorize(extract_channel_meta_data)
 
-def adc_to_mv(adc, DCOFFSET=+50, vpp=2.0, bit_of_daq=14):
+def adc_to_mv(adc, DCOFFSET=+50, vpp=2.0, bit_of_daq=14): #DC offset should be +50 instead of 40, legacy
     #DC OFFSET = +40: -0.2 - 1.8
     #DC OFFSET = +50: 0.0 - 2.0
     #DC OFFSET = -50: -2 - 0.0
