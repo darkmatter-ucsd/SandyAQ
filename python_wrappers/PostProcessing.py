@@ -173,7 +173,7 @@ class PostProcessing:
             spd.integral_window = (0.3,0.55)
         else:
             board_number = 1
-            spd.integral_window = (0.4,0.6)
+            spd.integral_window = (0.3,0.55) #legacy, FIXME: remove
             # local_channel = channel - 16
 
         processor= sandpro.processing.rawdata.RawData(config_file = "process_config.json",
