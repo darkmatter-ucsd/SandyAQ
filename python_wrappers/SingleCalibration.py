@@ -24,10 +24,31 @@ sys.path.insert(0,"/home/daqtest/Processor/sandpro")
 import sandpro
 
 class SingleCalibration:
+
     def __init__(self, data_taking_settings, 
                  config_template_path = "/home/daqtest/DAQ/SandyAQ/sandyaq/config/config_template.ini", 
                  calibration = True):
         
+        # global variables
+        self.threshold_muplitplier = 4.5 * np.ones(24) # for 46 V
+        # self.threshold_muplitplier = 5 * np.ones(24) # haven't find it useful yet
+        # self.threshold_muplitplier = 4 * np.sqrt(2) * np.ones(24) # for 49 V
+        # self.threshold_muplitplier[0] = 4.5
+        # self.threshold_muplitplier[3] = 6.5
+        # self.threshold_muplitplier[4] = 6.5
+        # self.threshold_muplitplier[5] = 5
+        # self.threshold_muplitplier[6] = 4
+        # self.threshold_muplitplier[9] = 5
+        # self.threshold_muplitplier[12] = 5
+        # self.threshold_muplitplier[13] = 6
+        # self.threshold_muplitplier[15] = 5
+        # self.threshold_muplitplier[16] = 6
+        # self.threshold_muplitplier[17] = 5
+        # self.threshold_muplitplier[18] = 5
+        # self.threshold_muplitplier[19] = 5.5
+        # self.threshold_muplitplier[21] = 4.8
+        # self.threshold_muplitplier[22] = 5.8
+
         # check if the data_taking_settings is a dictionary, and have all of the required keys
         if not isinstance(data_taking_settings, dict):
             raise ValueError("data_taking_settings should be a dictionary")
@@ -42,7 +63,7 @@ class SingleCalibration:
 
         # calibration settings
         self.n_calibration_events = 3000
-        self.calibration_start_index = 1000 # cannot be lower than this
+        self.calibration_start_index = 2000 # cannot be lower than this
 
         # check if the config_template is a string and exists
         if not isinstance(config_template_path, str):
@@ -152,7 +173,7 @@ class SingleCalibration:
             # meta_file_name = os.path.join(self.data_taking_settings["output_folder"], f"meta_{data_file_name}.json")
         
 
-        runtime_csv_file = os.path.join(base_path, f"runtime_all_channel.csv")
+        runtime_csv_file = os.path.join(base_path, f"runtime_all_channel_{timestamp}.csv")
         with open(runtime_csv_file, "w") as f:
                 f.write("channel,elapsed_time\n")
 
@@ -220,6 +241,7 @@ class SingleCalibration:
         # Get the thresholds from the last 24 calibration runs
         baseline_mean_array = []
         baseline_std_array = []
+        channels = []
 
         for i, meta_data in enumerate(sorted_meta_data_list):
             print(sorted_meta_data_list[i])
@@ -227,6 +249,7 @@ class SingleCalibration:
             meta_data_basename = os.path.basename(meta_data)
             parts = meta_data_basename.split('_')
             config_name = "_".join(parts[1:4]) + ".ini"
+            channel = int(parts[2])
 
             print(config_name)
             config_path = os.path.join(data_folder, "tmp", config_name)
@@ -273,11 +296,13 @@ class SingleCalibration:
             baseline_mean = np.mean(wfp.baseline)
             baseline_mean_array.append(baseline_mean)
             baseline_std_array.append(baseline_std)
+            channels.append(channel)
 
         baseline_mean_array = np.array(baseline_mean_array)
         baseline_std_array = np.array(baseline_std_array)
         # threshold_mV = (baseline_mean_array + 2 * (2 * np.sqrt(2) * baseline_std_array)) * 1000
-        threshold_mV = (baseline_mean_array + 4 * baseline_std_array) * 1000
+
+        threshold_mV = (baseline_mean_array + self.threshold_muplitplier[channels] * baseline_std_array) * 1000
         threshold_adc = util.v_mv_to_adc(threshold_mV)
         
         threshold_dict = {i:int(thres) for i, thres in enumerate(threshold_adc.astype(int))}
