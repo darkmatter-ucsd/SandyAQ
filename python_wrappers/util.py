@@ -6,6 +6,17 @@ multiple scripts.
 from datetime import datetime
 import numpy as np
 import os
+import pandas as pd
+
+
+def load_run_info(path = "../run_info.csv"):
+    """
+    Load the run info from the run_info.csv file into pandas dataframe
+    """
+    df = pd.read_csv(path)
+
+
+    return df
 
 def extract_date_meta_data(meta_data_path):
 
