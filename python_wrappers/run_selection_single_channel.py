@@ -7,6 +7,7 @@ import re
 import numpy as np
 import configparser
 import sys
+import datetime
 
 from dataclasses import dataclass
 
@@ -15,7 +16,7 @@ sys.path.insert(0,"/home/daqtest/Processor/sandpro")
 import sandpro
 
 DATA_FOLDERS = [
-    "/home/daqtest/DAQ/SandyAQ/softlink_to_data/",
+    "/home/daqtest/DAQ/SandyAQ/softlink_to_data/all_data/",
     # Add more data folders as needed, need to be an absolute path
 ]
 
@@ -32,7 +33,7 @@ class RunInfo:
     file_path: str = ""
     date_time: pd.Timestamp = np.nan
     run_tag: str = np.nan
-    comment: str = ""
+    comment: str = np.nan
     
     number_of_channels: int = 1
     channel: int = np.nan
@@ -89,30 +90,46 @@ def single_data_file_to_dict(file_path: str) -> dict:
             
             # Read voltage and temperature from the meta file
             if os.path.exists(meta_file):
+                #print(f"Reading meta file: {meta_file}")
+
                 with open(meta_file, "r") as file:
                     meta_data = json.load(file)
                     
-                    voltage_config = meta_data.get("voltage_config")
-                    if voltage_config:
-                        # info.voltage_preamp1 = list(voltage_config.values())[0]  # Assume all preamps have the same voltage
-                        info.voltage_preamp1 = voltage_config["preamp_1"]  # Assume all preamps have the same voltage
-                        
-                    info.temperature = meta_data.get("temperature")
+                voltage_config = meta_data.get("voltage_config")
+                if voltage_config:
+                    # info.voltage_preamp1 = list(voltage_config.values())[0]  # Assume all preamps have the same voltage
+                    info.voltage_preamp1 = voltage_config["preamp_1"]  # Assume all preamps have the same voltage
                     
-                    try: # Not all files contain comment, number_of_events, runtime
-                        info.comment = str(meta_data.get("comment"))
-                        info.number_of_events = int(meta_data.get("number_of_events"))
-                        info.runtime = meta_data.get("runtime")
-                    except:
-                        info.comment = ""
-                    
-                    # Run tag
-                    if (os.path.dirname(info.file_path).find("/threshold_calibration/") != -1) or (meta_data.get("run_tag") == "threshold_calibration"):
-                        info.run_tag = "threshold_calibration"
-                    elif (meta_data.get("run_tag")!= None):
-                        info.run_tag = meta_data.get("run_tag")
-                    else:
-                        info.run_tag = "GXe/gain_calibration" # started out with GXe calibration and didn't have run_tag in the meta file
+                info.temperature = meta_data.get("temperature")
+                
+                try: # Not all files contain comment, number_of_events, runtime
+                    info.comment = str(meta_data.get("comment"))
+                    info.number_of_events = int(meta_data.get("number_of_events"))
+
+                    # Parse the time string into a timedelta object
+                    time_obj = datetime.datetime.strptime(meta_data.get("runtime"), "%H:%M:%S.%f")
+                    # Calculate total seconds
+                    info.runtime = time_obj.hour * 3600 + time_obj.minute * 60 + time_obj.second + time_obj.microsecond / 1e6
+
+                except:
+                    # info.comment = ""
+                    pass
+                
+                # Run tag
+                if (os.path.dirname(info.file_path).find("/threshold_calibration") != -1) or (meta_data.get("run_tag") == "threshold_calibration"):
+                    info.run_tag = "threshold_calibration"
+                elif (meta_data.get("run_tag")!= None):
+                    info.run_tag = meta_data.get("run_tag")
+                else:
+                    info.run_tag = "GXe/gain_calibration" # started out with GXe calibration and didn't have run_tag in the meta file
+
+                # # remove after running once; add tag in previous runs
+                # new_meta_data = meta_data.copy()
+                # new_meta_data["run_tag"] = info.run_tag
+                # # Write new meta file to include the run tag
+                # if meta_data.get("run_tag")== None:
+                #     with open(meta_file, "w") as file:
+                #         json.dump(new_meta_data, file, indent=4)
             
             truncate_event_front = 1000 #index to truncate the events before
             truncate_event_back = 500 #index to truncate the events after
@@ -155,9 +172,27 @@ def single_data_file_to_dict(file_path: str) -> dict:
 
                     except Exception as e:
                         print(e)
-                        pass
+                        try:
+                            waveform = processor.get_rawdata_numpy(1999,
+                                                        file=info.file_path, # specific .bin file
+                                                        bit_of_daq=14,
+                                                        headersize=4,inversion=False)
+                            start_index, end_index = 1000, 1900 #first 1000 events are noisy
+
+                            wfp = WaveformProcessor.WFProcessor(file_dir, volt_per_adc=2/2**14)
+                            wfp.set_data(waveform["data_per_channel"][start_index:end_index,0], in_adc = False)
+                            wfp.process_wfs()
+                            
+                            info.baseline_std = np.mean(wfp.baseline_rms)
+                            info.baseline_mean = np.mean(wfp.baseline)
+                            info.n_processed_events = int(len(wfp.baseline_rms))
+                            
+                        except Exception as e:
+                            print(e)
+                            print("Error in reading the waveform for file: ", info.file_path)
             
             return info.__dict__
+        return None
     return None
 
 v_single_data_file_to_dict = np.vectorize(single_data_file_to_dict)
@@ -172,7 +207,8 @@ def data_files_to_csv(data_files: List[str], existing_df: pd.DataFrame = None, r
     - read voltage, temperature from the meta file
     """
 
-    data = []
+    # data = []
+    data = None
     info = RunInfo()
     n_columns = len(info.__dict__)
 
@@ -180,7 +216,7 @@ def data_files_to_csv(data_files: List[str], existing_df: pd.DataFrame = None, r
     chunk_size = 100
 
     # Check if the existing DataFrame has the same number of columns as the new data
-    length_existing_df = 0 if existing_df is None else len(existing_df)
+    length_existing_df = 0 if existing_df is None else len(existing_df.columns)
     print("Number of columns match? ", (length_existing_df == n_columns))
     
     # Convert the data_files list to a numpy array for faster processing
@@ -197,23 +233,38 @@ def data_files_to_csv(data_files: List[str], existing_df: pd.DataFrame = None, r
     else:
         print("No new files to process")
         return
-
-    # Main loop to process the data in chunks
-    for i in range(0, len(data_files), chunk_size):
-        # Process the chunk of data (e.g., perform calculations, transformations, etc.)
-        processed_chunk = data_files[i:i+chunk_size]
+    
+    # Just to check if the data_files are being processed correctly
+    for data_file in data_files:
 
         try:
-            data = v_single_data_file_to_dict(processed_chunk) # Convert the chunk of data
-            data = data[data != np.array(None)] # Remove any None values
+            data = single_data_file_to_dict(data_file) # Convert the chunk of data
+            # data = data[data != np.array(None)] # Remove any None values
         except Exception as e:
-            print(f"Error processing data: {e} \n in files: ")
-            print(data_files[i:i+chunk_size])
+            print(f"Error processing data: {e}")
             continue
 
-        # Create a DataFrame from the new data -> csv
-        new_df = pd.DataFrame(data.tolist())
-        new_df.to_csv(RUN_INFO_FILE, mode='a', index=False, header=False)
+        # Create a DataFrame from the new data -> csv; write to file in append mode
+        if data != None:
+            new_df = pd.DataFrame.from_dict([data])
+            new_df.to_csv(RUN_INFO_FILE, mode='a', index=False, header=False)
+
+    # Main loop to process the data in chunks
+    # for i in range(0, len(data_files), chunk_size):
+    #     # Process the chunk of data (e.g., perform calculations, transformations, etc.)
+    #     processed_chunk = data_files[i:i+chunk_size]
+
+    #     try:
+    #         data = v_single_data_file_to_dict(processed_chunk) # Convert the chunk of data
+    #         data = data[data != np.array(None)] # Remove any None values
+    #     except Exception as e:
+    #         print(f"Error processing data: {e}")
+    #         # print(data_files[i:i+chunk_size])
+    #         continue
+
+    #     # Create a DataFrame from the new data -> csv
+    #     new_df = pd.DataFrame(data.tolist())
+    #     new_df.to_csv(RUN_INFO_FILE, mode='a', index=False, header=False)
     
     return
 
