@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import sys
 import glob
 import os
@@ -14,6 +15,7 @@ import pandas as pd
 import util
 import WaveformProcessor
 import FitSPE
+from matplotlib.lines import Line2D
 
 
 
@@ -109,7 +111,7 @@ class PostProcessing:
         #                         "baseline_std":pd.Series([], dtype='float'),
         #                         "threshold_adc":pd.Series([], dtype='int'),
         #                         "areas":pd.Series([], dtype='float'),
-        #                         "heights":pd.Series([], dtype='float'),
+        #                         "heights":pd.Series([], dtype='float'),                          
         #                         "randomly_selected_raw_WF":pd.Series([], dtype='object'),
         #                         "randomly_selected_filtered_WF":pd.Series([], dtype='object')}) 
                 
@@ -315,9 +317,18 @@ class PostProcessing:
         if not self.calibration_run:
             try:
                 spe_fit = FitSPE.FitSPE(hist_count, bin_edges, plot = False, show_plot=False, save_plot=False)
-                axes[2,0].plot(np.transpose(spe_fit.line_x),np.transpose(spe_fit.line_y),color='black')
+                axes[2,0].plot(np.transpose(spe_fit.line_x)[:,spe_fit.mu_err_list<0.03],np.transpose(spe_fit.line_y)[:,spe_fit.mu_err_list<0.03],color='black')
+                axes[2,0].plot(np.transpose(spe_fit.line_x)[:,spe_fit.mu_err_list>=0.03],np.transpose(spe_fit.line_y)[:,spe_fit.mu_err_list>=0.03],color='blue')
             except:
                 print("Could not fit SPE")
+
+            handles, labels = axes[2,0].get_legend_handles_labels()
+            custom_lines = [Line2D([0], [0], color='black'),
+                            Line2D([0], [0], color='blue')]
+
+            handles += custom_lines
+            labels += ['Good fit','Bad fit']
+
 
         # axes[1,1].hist(heights,bins=100,range=(0,40),histtype='step')
         axes[2,1].hist2d(spd.areas,spd.heights,bins=[200,100],range=[[-0.1,10],[0,60]],cmap='viridis',norm="log")
@@ -327,7 +338,11 @@ class PostProcessing:
         
 
         for ax in axes.flatten():
-            ax.legend()
+            if ax == axes[2,0]:
+                # Update legend with custom lines and labels
+                ax.legend(handles=handles, labels=labels,loc='upper right')
+            else:
+                ax.legend()
         axes[0,0].set_title(f"Raw WFs channel {spd.channel}")
         axes[0,1].set_title(f"Filtered WFs channel {spd.channel}")
         axes[1,0].set_title(f"Zoomed raw WFs channel {spd.channel}")
@@ -347,7 +362,7 @@ class PostProcessing:
 
         return
     
-    def get_SPE(self, show_plot = True, save_plot = True, channels = []):
+    def get_SPE(self, show_plot = False, save_plot = False, channels = []):
         if(len(self.df) == 0):
             print("No data to plot. Run process_run first.")
             return
@@ -358,16 +373,20 @@ class PostProcessing:
             df = self.df.loc[mask]
         else:
             df = self.df
-        
+
+        spe_fit_list = []
         for i in range(len(df)):
             single_row_data = df.iloc[i]
 
             hist_count= np.array(single_row_data.hist_count)
             bin_edges = np.array(single_row_data.bin_edges)
-
-            spe_fit = FitSPE(hist_count, bin_edges, show_plot=show_plot, save_plot=save_plot, output_name = f"channel_{single_row_data.channel}")
+            # try:
+            spe_fit = FitSPE.FitSPE(hist_count, bin_edges, show_plot=show_plot, save_plot=save_plot)
+            spe_fit_list.append(spe_fit)
+            # except:
+            #     print("Could not fit SPE")
             
-        return spe_fit
+        return spe_fit_list
     
         
 
