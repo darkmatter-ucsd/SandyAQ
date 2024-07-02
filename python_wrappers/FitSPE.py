@@ -96,9 +96,9 @@ class FitSPE:
             if save_plot:
                 plt.savefig(output_name+'SPE_fit.png')
 
-        self.amp_list = amp_list
-        self.mu_list = mu_list
-        self.sig_list = sig_list
+        self.amp_list = np.array(amp_list)
+        self.mu_list = np.array(mu_list)
+        self.sig_list = np.array(sig_list)
         self.mu_err_list = np.array(mu_err_list)
         self.line_x = np.array(line_x) ## FIXME: the dimension of linex might not be the same, max_x out of range
         self.line_y = np.array(line_y)
@@ -111,14 +111,39 @@ class FitSPE:
         return: gain (float)
                 confidence (float)
         '''
-        gain_list = np.diff(self.mu_list)
+        # calculated difference of all peaks with good enough fit 
+        # checked by eyes that 0.03 is good, but can do a more serious cut
+        gain_list = np.diff(self.mu_list[self.mu_err_list<0.03])
         np.append([self.mu_list[0]],gain_list)
-
-        mean = np.mean(gain_list) # Relative error of the mean
-        sem = np.std(gain_list, ddof=1) / np.sqrt(np.size(gain_list)) # Standard error of the mean
-        rel_sem = np.std(gain_list, ddof=1) / np.sqrt(np.size(gain_list)) / np.mean(gain_list) # Relative error of the standard error of the mean
-        distance_from_mean = np.abs(gain_list - mean)
-        gain_list = gain_list[distance_from_mean < 3*sem]
+        sorted_gain_list = sorted(gain_list)
+        print(sorted_gain_list) #FIXME: should have weighted mean that favour smaller values
+        
+        input_impedance = 50 #ohm
+        sem = 1.0
+        maximum_niteration = 4
+        count = 0
+        while (len(gain_list) >= 3) & (sem > 0.03) & (count < maximum_niteration):
+            mean = np.mean(gain_list) # mean of gain
+            sem = np.std(gain_list, ddof=1) / np.sqrt(np.size(gain_list)) # Standard error of the mean
+            rel_sem = np.std(gain_list, ddof=1) / np.sqrt(np.size(gain_list)) / np.mean(gain_list) # Relative error of the standard error of the mean
+            distance_from_mean = np.abs(gain_list - mean)
+            print(distance_from_mean)
+            
+            tmp_gain_list = gain_list[distance_from_mean < 1.5*sem]
+            if (len(tmp_gain_list) < 3): 
+                break
+            else:
+                gain_list = tmp_gain_list
+            
+            print(sem)
+            
+            count += 1
+        
+        self.mean_gain = np.mean(gain_list)/input_impedance*1e-12/1.6e-19
+        self.sem = sem
+        return self.sem
+        
+        
         
         
     # Let's create a function to model and create data 

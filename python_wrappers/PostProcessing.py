@@ -120,7 +120,7 @@ class PostProcessing:
         
     def process_run(self):
         self._v_process_run(self, self.list_of_files)
-        return 
+        return
     
     def process_run_single_run(self, meta_data):
 
@@ -183,7 +183,7 @@ class PostProcessing:
                                         file=os.path.join(self.data_folder, data_file_basename),
                                         bit_of_daq=14,
                                         headersize=4,inversion=False)
-            spd.start_index, spd.end_index = 2000, spd.n_events-1-500 #first 1000 events are noisy
+            spd.start_index, spd.end_index = 1000, spd.n_events-1-500 #first 1000 events are noisy
             print(f"analysing events from range: {spd.start_index} to {spd.end_index}")
         except Exception as e:
             print(e)
@@ -387,6 +387,8 @@ class PostProcessing:
             #     print("Could not fit SPE")
             
         return spe_fit_list
+    
+    
     
         
 
