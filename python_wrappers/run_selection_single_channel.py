@@ -9,7 +9,7 @@ import configparser
 import sys
 import datetime
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import WaveformProcessor
 sys.path.insert(0,"/home/daqtest/Processor/sandpro")
@@ -20,9 +20,17 @@ DATA_FOLDERS = [
     # Add more data folders as needed, need to be an absolute path
 ]
 
+EXCLUDE_FOLDERS = [
+    "/home/daqtest/DAQ/SandyAQ/softlink_to_data/all_data/20240701_T102_47V_6.5sig",
+    "/home/daqtest/DAQ/SandyAQ/softlink_to_data/all_data/20240701_T102_47V_7.0sig",
+    "/home/daqtest/DAQ/SandyAQ/softlink_to_data/all_data/20240701_T102_47V_7.5sig"
+]
+
+EXCLUDE_FOLDERS = []
+
 RUN_INFO_FILE = "run_info_single_channel.csv" #output
 
-REPROCESS = True
+REPROCESS = False
 
 @dataclass
 class RunInfo:
@@ -32,35 +40,46 @@ class RunInfo:
     '''
     file_path: str = ""
     date_time: pd.Timestamp = np.nan
-    run_tag: str = np.nan
-    comment: str = np.nan
+    # run_tag: list = field(default_factory=list)
+    run_tag: str = ""
+    comment: str = ""
     
     number_of_channels: int = 1
     channel: int = np.nan
     board: int = np.nan
-    threshold: int = np.nan
+    threshold_adc: int = np.nan
 
-    runtime: float = np.nan
-    voltage_preamp1: float = np.nan
-    temperature: float = np.nan
+    runtime_s: float = np.nan
+    voltage_preamp1_V: float = np.nan
+    temperature_K: float = np.nan
     
     number_of_events: int = np.nan
     n_processed_events: int = np.nan
-    record_length: int = np.nan
+    start_index: int = np.nan
+    
+    record_length_sample: int = np.nan
     baseline_n_samples: int = 120
     baseline_n_samples_avg: int = 40
     baseline_std: float = np.nan
     baseline_mean: float = np.nan
+    
 
 
-def get_data_files(data_directories: List[str]) -> List[str]:
+def get_data_files(data_directories: List[str], exclude_directories: List[str]) -> List[str]:
     """
     Get all the data files in the given data directories
     Also search subdirectories
     """
     data_files = []
+
     for data_directory in data_directories:
-        data_files.extend(glob.glob(os.path.join(data_directory, "**/config_*.bin"), recursive=True))
+        for root, dirs, files in os.walk(data_directory):
+            # Skip excluded directories
+            dirs[:] = [d for d in dirs if os.path.join(root, d) not in exclude_directories]
+            # Find matching files
+            data_files_name = glob.glob(os.path.join(root, "config_*.bin"))
+            data_files.extend(data_files_name)
+                
     return data_files
 
 def single_data_file_to_dict(file_path: str) -> dict:
@@ -74,9 +93,9 @@ def single_data_file_to_dict(file_path: str) -> dict:
 
     # Extract the basic identifier information from the file name that matches the pattern
     if match:
-        info.channel, info.threshold, date, time, info.board = match.groups()
+        info.channel, info.threshold_adc, date, time, info.board = match.groups()
         info.channel = int(info.channel)
-        info.threshold = int(info.threshold)
+        info.threshold_adc = int(info.threshold_adc)
         info.board = int(info.board)
         file_dir = os.path.dirname(info.file_path)
         
@@ -85,8 +104,8 @@ def single_data_file_to_dict(file_path: str) -> dict:
             info.date_time = pd.to_datetime(f"{date}_{time}", format="%Y%m%d_%H%M%S")
             
             # Find the corresponding meta file
-            meta_file = os.path.join(file_dir, f"meta_config_{info.channel}_{info.threshold}_{date}_{time}.json")
-            config_file = os.path.join(file_dir, "tmp", f"config_{info.channel}_{info.threshold}.ini")
+            meta_file = os.path.join(file_dir, f"meta_config_{info.channel}_{info.threshold_adc}_{date}_{time}.json")
+            config_file = os.path.join(file_dir, "tmp", f"config_{info.channel}_{info.threshold_adc}.ini")
             
             # Read voltage and temperature from the meta file
             if os.path.exists(meta_file):
@@ -98,39 +117,70 @@ def single_data_file_to_dict(file_path: str) -> dict:
                 voltage_config = meta_data.get("voltage_config")
                 if voltage_config:
                     # info.voltage_preamp1 = list(voltage_config.values())[0]  # Assume all preamps have the same voltage
-                    info.voltage_preamp1 = voltage_config["preamp_1"]  # Assume all preamps have the same voltage
+                    info.voltage_preamp1_V = voltage_config["preamp_1"]  # Assume all preamps have the same voltage
                     
-                info.temperature = meta_data.get("temperature")
+                info.temperature_K = meta_data.get("temperature")
+                if info.temperature_K < 0:
+                    info.temperature_K = info.temperature_K + 273 # convert to Kelvin
                 
-                try: # Not all files contain comment, number_of_events, runtime
-                    info.comment = str(meta_data.get("comment"))
-                    info.number_of_events = int(meta_data.get("number_of_events"))
-
-                    # Parse the time string into a timedelta object
+                # Parse the time string into a timedelta object
+                _tmp = meta_data.get("runtime")
+                if _tmp != None:
                     time_obj = datetime.datetime.strptime(meta_data.get("runtime"), "%H:%M:%S.%f")
                     # Calculate total seconds
-                    info.runtime = time_obj.hour * 3600 + time_obj.minute * 60 + time_obj.second + time_obj.microsecond / 1e6
+                    info.runtime_s = time_obj.hour * 3600 + time_obj.minute * 60 + time_obj.second + time_obj.microsecond / 1e6
 
-                except:
-                    # info.comment = ""
-                    pass
+                _tmp = meta_data.get("comment")
+                if _tmp != None:
+                    info.comment = str(_tmp)
                 
-                # Run tag
-                if (os.path.dirname(info.file_path).find("/threshold_calibration") != -1) or (meta_data.get("run_tag") == "threshold_calibration"):
-                    info.run_tag = "threshold_calibration"
-                elif (meta_data.get("run_tag")!= None):
-                    info.run_tag = meta_data.get("run_tag")
+                _tmp = meta_data.get("number_of_events")
+                if _tmp != None:
+                    info.number_of_events = int(meta_data.get("number_of_events"))
+                
+                # Run tag: whether run_tag is str or list in meta_data file -> into list of run tags
+                _tmp = meta_data.get("run_tag")
+                _tmp_list = []
+                if _tmp != None:
+                    _run__tag = _tmp
+                    if type(_run__tag) == list:
+                        for i in _run__tag:
+                            _tmp_list.append(i)
+                    elif type(_run__tag) == str:
+                        _tmp_list.append(_run__tag)
+                    else:
+                        raise TypeError
+                elif (os.path.dirname(info.file_path).find("/threshold_calibration") != -1):
+                    _tmp_list.append("threshold_calibration")
                 else:
-                    info.run_tag = "GXe/gain_calibration" # started out with GXe calibration and didn't have run_tag in the meta file
+                    _tmp_list.append("GXe/gain_calibration") # started out with GXe calibration and didn't have run_tag in the meta file
 
-                # # remove after running once; add tag in previous runs
-                # new_meta_data = meta_data.copy()
-                # new_meta_data["run_tag"] = info.run_tag
-                # # Write new meta file to include the run tag
-                # if meta_data.get("run_tag")== None:
-                #     with open(meta_file, "w") as file:
-                #         json.dump(new_meta_data, file, indent=4)
-            
+                # FIXME: hard-code tag
+                _split_file_path = info.file_path.split("/")
+                _split_file_path = "/".join(_split_file_path[3:]) # remove /home/daqtest/ or path for home for (**)
+                
+                if "trash" in info.file_path: 
+                    _tmp_list.append("trash")
+                    
+                if "test" in _split_file_path: # ref(**)
+                    _tmp_list.append("test")
+                    
+                info.run_tag = "|".join(_tmp_list)
+
+                if (meta_data.get("run_tag") == None):
+                    new_meta_data = meta_data.copy()
+                    new_meta_data["run_tag"] = info.run_tag
+
+                    _base_name = os.path.basename(meta_file)
+                    _path_name = os.path.dirname(meta_file)
+                    new_file_name = os.path.join(_path_name, f"new_{_base_name}")
+
+                    print(f"Writing new meta file: {new_file_name}")
+                    with open(new_file_name, "w") as file:
+                        json.dump(new_meta_data, file, indent=4)
+                        
+                    print("PLEASE update metda data file, run_tag is missing")
+
             truncate_event_front = 1000 #index to truncate the events before
             truncate_event_back = 500 #index to truncate the events after
 
@@ -142,16 +192,16 @@ def single_data_file_to_dict(file_path: str) -> dict:
                     config.optionxform = str
                     config.read(config_file)
 
-                    info.record_length = int(config.get("COMMON", "RECORD_LENGTH"))
+                    info.record_length_sample = int(config.get("COMMON", "RECORD_LENGTH"))
 
                     process_config = {"nchs": info.number_of_channels,
-                    "nsamps": info.record_length,
+                    "nsamps": info.record_length_sample,
                     "sample_selection": info.baseline_n_samples, 
                     "samples_to_average": info.baseline_n_samples_avg}
 
                     # dump the config to a json file
                     with open("process_config.json", "w") as f:
-                        json.dump(process_config, f)
+                        json.dump(process_config, f, indent=4)
 
                     processor= sandpro.processing.rawdata.RawData(config_file = "process_config.json",
                                                             perchannel=False) # what does this perchannel mean?
@@ -169,6 +219,7 @@ def single_data_file_to_dict(file_path: str) -> dict:
                         info.baseline_std = np.mean(wfp.baseline_rms)
                         info.baseline_mean = np.mean(wfp.baseline)
                         info.n_processed_events = int(len(wfp.baseline_rms))
+                        info.start_index = int(start_index)
 
                     except Exception as e:
                         print(e)
@@ -213,23 +264,28 @@ def data_files_to_csv(data_files: List[str], existing_df: pd.DataFrame = None, r
     n_columns = len(info.__dict__)
 
     # Saving the data in chunks to avoid memory issues
-    chunk_size = 100
+    # chunk_size = 100
 
     # Check if the existing DataFrame has the same number of columns as the new data
     length_existing_df = 0 if existing_df is None else len(existing_df.columns)
-    print("Number of columns match? ", (length_existing_df == n_columns))
+    print("Number of columns match? ", (length_existing_df == n_columns+1))
+    print("Not reprocessing? ", (not reprocess))
+    print("existing_df is not None? ", (existing_df is not None))
     
     # Convert the data_files list to a numpy array for faster processing
     data_files = np.array(data_files)
 
     # If not reprocessing, filter out the files that are already in the existing DataFrame
-    if (not reprocess) and (existing_df is not None) and (length_existing_df == n_columns): 
+    if (not reprocess) and (existing_df is not None) and (length_existing_df == n_columns+1): 
         path_array = np.array(existing_df["file_path"].unique())
         data_files = data_files[~np.in1d(data_files, path_array)] # Filter out the files that are already processed
+        print(f"Processing {len(data_files)} new files")
+        
     elif (len(data_files) != 0):
+        # write the header to csv file
         print(f"Processing {len(data_files)} new files")
         data_df = pd.DataFrame(columns=info.__dict__.keys())
-        data_df.iloc[:0].to_csv(RUN_INFO_FILE, index=False)
+        data_df.iloc[:0].to_csv(RUN_INFO_FILE, index=False) #FIXME: why :0?
     else:
         print("No new files to process")
         return
@@ -238,7 +294,7 @@ def data_files_to_csv(data_files: List[str], existing_df: pd.DataFrame = None, r
     for data_file in data_files:
 
         try:
-            data = single_data_file_to_dict(data_file) # Convert the chunk of data
+            data = single_data_file_to_dict(data_file) 
             # data = data[data != np.array(None)] # Remove any None values
         except Exception as e:
             print(f"Error processing data: {e}")
@@ -271,7 +327,7 @@ def data_files_to_csv(data_files: List[str], existing_df: pd.DataFrame = None, r
 def main():
     # Load the existing run_info DataFrame if it exists
     if os.path.exists(RUN_INFO_FILE):
-        run_info_df = pd.read_csv(RUN_INFO_FILE)
+        run_info_df = pd.read_csv(RUN_INFO_FILE, parse_dates=["date_time"],delimiter=",",quotechar='"', skipinitialspace=True, encoding="utf-8")
         print(f"Run info for {len(run_info_df)} runs found in {RUN_INFO_FILE}")
     else:
         run_info_df = None
@@ -282,7 +338,7 @@ def main():
             raise ValueError(f"{data_folder} is not an absolute path for a directory")
 
     # Get the list of data files from DATA_FOLDERS
-    data_files = get_data_files(DATA_FOLDERS)
+    data_files = get_data_files(DATA_FOLDERS, EXCLUDE_FOLDERS)
     print(f"Found {len(data_files)} data files in {DATA_FOLDERS}")
 
     # Generate the updated run_info DataFrame; write into RUN_INFO_FILE
@@ -293,7 +349,9 @@ def main():
 
     # Load the updated run_info DataFrame
     if os.path.exists(RUN_INFO_FILE):
-        run_info_df = pd.read_csv(RUN_INFO_FILE)
+        # run_info_df = pd.read_csv(RUN_INFO_FILE)
+        run_info_df = pd.read_csv(RUN_INFO_FILE, parse_dates=["date_time"],delimiter=",",quotechar='"', skipinitialspace=True, encoding="utf-8")
+        
     else:
         raise FileNotFoundError(f"Run info file {RUN_INFO_FILE} not found")
 
