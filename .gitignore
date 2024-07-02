@@ -10,3 +10,11 @@ python_wrappers/notebooks/test_output/
 *.png
 softlink_to_data
 *process_config.json
+*log*
+*.bin
+*.json
+*.csv
+
+
+# But include abc.csv
+!run_info_single_channel.csv
