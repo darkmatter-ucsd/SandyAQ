@@ -18,6 +18,9 @@ import sys
 import configparser
 import json
 
+import threading
+import time
+
 import WaveformProcessor
 import util
 sys.path.insert(0,"/home/daqtest/Processor/sandpro")
@@ -29,49 +32,51 @@ class SingleCalibration:
                  config_template_path = "/home/daqtest/DAQ/SandyAQ/sandyaq/config/config_template.ini", 
                  calibration = True):
         
+        self.run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ/sandyaq/build/sandyaq"
+        
         # global variables
-        self.threshold_muplitplier = 3.5 * np.ones(24) # for 46 V
-        # self.threshold_muplitplier = 5 * np.ones(24) # haven't find it useful yet
+        # self.threshold_multiplier = 3.5 * np.ones(24) # for 46 V
+        # self.threshold_multiplier = 5 * np.ones(24) # haven't find it useful yet
 
         # # for 49 V
-        # self.threshold_muplitplier = 4 * np.sqrt(2) * np.ones(24) 
-        # self.threshold_muplitplier[0] = 3.5
-        # self.threshold_muplitplier[3] = 6.5
-        # self.threshold_muplitplier[4] = 6.5
-        # self.threshold_muplitplier[5] = 4.5
-        # self.threshold_muplitplier[6] = 3.0
-        # self.threshold_muplitplier[9] = 3.5
-        # self.threshold_muplitplier[10] = 2.5
-        # self.threshold_muplitplier[12] = 4.5
-        # self.threshold_muplitplier[13] = 6.0
-        # self.threshold_muplitplier[15] = 4.0
-        # self.threshold_muplitplier[16] = 6.0
-        # self.threshold_muplitplier[17] = 4.0
-        # self.threshold_muplitplier[18] = 4.5
-        # self.threshold_muplitplier[19] = 5.8
-        # self.threshold_muplitplier[21] = 3.5
-        # self.threshold_muplitplier[22] = 4.8
+        # self.threshold_multiplier = 4 * np.sqrt(2) * np.ones(24) 
+        # self.threshold_multiplier[0] = 3.5
+        # self.threshold_multiplier[3] = 6.5
+        # self.threshold_multiplier[4] = 6.5
+        # self.threshold_multiplier[5] = 4.5
+        # self.threshold_multiplier[6] = 3.0
+        # self.threshold_multiplier[9] = 3.5
+        # self.threshold_multiplier[10] = 2.5
+        # self.threshold_multiplier[12] = 4.5
+        # self.threshold_multiplier[13] = 6.0
+        # self.threshold_multiplier[15] = 4.0
+        # self.threshold_multiplier[16] = 6.0
+        # self.threshold_multiplier[17] = 4.0
+        # self.threshold_multiplier[18] = 4.5
+        # self.threshold_multiplier[19] = 5.8
+        # self.threshold_multiplier[21] = 3.5
+        # self.threshold_multiplier[22] = 4.8
 
         # # for 48 V
-        # self.threshold_muplitplier = 4 * np.sqrt(2) * np.ones(24) 
-        # self.threshold_muplitplier[0] = 4.0
-        # self.threshold_muplitplier[1] = 3.8
-        # self.threshold_muplitplier[3] = 6.0
-        # self.threshold_muplitplier[4] = 6.5
-        # self.threshold_muplitplier[5] = 4.5
-        # self.threshold_muplitplier[6] = 3.0
-        # self.threshold_muplitplier[7] = 3.5
-        # self.threshold_muplitplier[9] = 3.5
-        # self.threshold_muplitplier[10] = 3.0
-        # self.threshold_muplitplier[12] = 4.0
-        # self.threshold_muplitplier[13] = 5.5
-        # self.threshold_muplitplier[15] = 4.0
-        # self.threshold_muplitplier[16] = 5.5
-        # self.threshold_muplitplier[17] = 3.5
-        # self.threshold_muplitplier[18] = 4.0
-        # self.threshold_muplitplier[19] = 5.0
-        # self.threshold_muplitplier[21] = 3.5
-        # self.threshold_muplitplier[22] = 4.5
+        # self.threshold_multiplier = 4 * np.sqrt(2) * np.ones(24) 
+        # self.threshold_multiplier[0] = 4.0
+        # self.threshold_multiplier[1] = 3.8
+        # self.threshold_multiplier[3] = 6.0
+        # self.threshold_multiplier[4] = 6.5
+        # self.threshold_multiplier[5] = 4.5
+        # self.threshold_multiplier[6] = 3.0
+        # self.threshold_multiplier[7] = 3.5
+        # self.threshold_multiplier[9] = 3.5
+        # self.threshold_multiplier[10] = 3.0
+        # self.threshold_multiplier[12] = 4.0
+        # self.threshold_multiplier[13] = 5.5
+        # self.threshold_multiplier[15] = 4.0
+        # self.threshold_multiplier[16] = 5.5
+        # self.threshold_multiplier[17] = 3.5
+        # self.threshold_multiplier[18] = 4.0
+        # self.threshold_multiplier[19] = 5.0
+        # self.threshold_multiplier[21] = 3.5
+        # self.threshold_multiplier[22] = 4.5
 
         # check if the data_taking_settings is a dictionary, and have all of the required keys
         if not isinstance(data_taking_settings, dict):
@@ -80,10 +85,13 @@ class SingleCalibration:
         if not all(key in data_taking_settings for key in ["number_of_events",
                                                            "output_folder", 
                                                            "voltage_config", 
-                                                           "temperature"]):
+                                                           "temperature",
+                                                           "threshold_multiplier"]):
             raise ValueError("data_taking_settings should have all of the required keys: \
-                              number_of_events, output_folder, voltage_config, temperature")
+                              number_of_events, output_folder, voltage_config, temperature, threshold_multiplier")
         self.data_taking_settings = data_taking_settings
+        self.threshold_multiplier = self.data_taking_settings["threshold_multiplier"] * np.ones(24)
+
 
         # calibration settings
         self.n_calibration_events = 3000
@@ -112,13 +120,14 @@ class SingleCalibration:
         # 1. add the channel list
         # 2. add the thresholds
 
+        # create a separate set of config from the given config for the threshold calibration
         if calibration:
-            # set a very low threshold for all channels, to take noise data
             data_settings = self.data_taking_settings.copy()
-            #initialize the threshold dictionary
+            # set a very low threshold for all channels, to take noise data
             data_settings["channel_threshold_dict"] = {0:2305,1:2269,2:2395,3:2209,4:2378,5:2274,6:2386,7:2516,8:2627,9:2316,10:2162,11:2166,12:2456,13:2456,14:2413,15:2192,16:2230,17:2468,18:2158,19:2090,20:2342,21:2258,22:2313,23:2266}
             data_settings["number_of_events"] = self.n_calibration_events
             data_settings["output_folder"] = data_settings["output_folder"] + "/threshold_calibration"
+            data_settings["run_tag"] = "threshold_calibration"
 
         else:
             data_settings = self.data_taking_settings
@@ -172,23 +181,20 @@ class SingleCalibration:
         # settings for the calibration run
         self.tmp_config_files = self.generate_temp_configs(calibration=True)
         self.run(dry_run=False, calibration=True)
-        
-        # clear output (doesn't work in jupyter notebook)
-        # os.system('clear')
 
         # get threshold
         print("Determining thresholds from calibration run...")
         self.data_taking_settings["channel_threshold_dict"] = self.get_adc_threshold_from_calibration()
 
         self.tmp_config_files = self.generate_temp_configs(calibration=False)
+        
+    
+
 
     def run(self, dry_run = False, calibration = False):
-
-
         
         # get the current timestamp, and add it to the file name
-        start_timestamp = datetime.datetime.now()
-        timestamp = start_timestamp.strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
         if calibration:
             base_path = os.path.join(self.data_taking_settings["output_folder"], "threshold_calibration")
@@ -222,6 +228,8 @@ class SingleCalibration:
             # timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             data_file_name = f"{data_file_name}_{timestamp}"
             
+            start_timestamp = datetime.datetime.now()
+
             if not dry_run:
                 try:
                     print(f"Taking data with config file: {tmp_config_file}")
@@ -235,13 +243,13 @@ class SingleCalibration:
 
             meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
 
+            self.data_taking_settings["runtime"] = str(end_timestamp - start_timestamp)
+
             with open(meta_file_name, "w") as f:
-                self.data_taking_settings["runtime"] = str(end_timestamp- start_timestamp)
-                json.dump(self.data_taking_settings, f)
+                json.dump(self.data_taking_settings, f, indent=4)
 
             with open(runtime_csv_file, "a") as f:
-                f.write(f"{channel},{(end_timestamp- start_timestamp).total_seconds()}\n")
-
+                f.write(f"{channel},{(end_timestamp - start_timestamp).total_seconds()}\n")
                 
         return 
 
@@ -325,26 +333,25 @@ class SingleCalibration:
 
         baseline_mean_array = np.array(baseline_mean_array)
         baseline_std_array = np.array(baseline_std_array)
-        # threshold_mV = (baseline_mean_array + 2 * (2 * np.sqrt(2) * baseline_std_array)) * 1000
 
-        threshold_mV = (baseline_mean_array + self.threshold_muplitplier[channels] * baseline_std_array) * 1000
+        # threshold_mV = (baseline_mean_array + 2 * (2 * np.sqrt(2) * baseline_std_array)) * 1000
+        threshold_mV = (baseline_mean_array + self.threshold_multiplier[channels] * baseline_std_array) * 1000
+
         threshold_adc = util.v_mv_to_adc(threshold_mV)
         
         threshold_dict = {i:int(thres) for i, thres in enumerate(threshold_adc.astype(int))}
 
         return threshold_dict
     
-    
-# for debugging
-# if __name__ == "__main__":
-#     test_config = {}
-#     test_config["channel_threshold_dict"] = {0:2000,1:2319,2:2618,3:2273,4:2426,5:2341,6:2468,7:2567,8:2801,9:2371,10:2210,11:2352,12:2470,13:2496,14:2602,15:2264,16:2284,17:2531,18:2216,19:2147,20:2522,21:2306,22:2369,23:2465}
-#     test_config["number_of_events"] = 5000
-#     test_config["output_folder"] = "./test_calibration"
-#     test_config["voltage_config"] = {"preamp_1": -49, "preamp_2": -49,"preamp_3": -49,"preamp_4": -49,"preamp_5": -49}
-#     test_config["temperature"] = -98
+if __name__ == "__main__":
+    test_config = {}
+    test_config["channel_threshold_dict"] = {0:2000,1:2319,2:2618,3:2273,4:2426,5:2341,6:2468,7:2567,8:2801,9:2371,10:2210,11:2352,12:2470,13:2496,14:2602,15:2264,16:2284,17:2531,18:2216,19:2147,20:2522,21:2306,22:2369,23:2465}
+    test_config["number_of_events"] = 5000
+    test_config["output_folder"] = "./test_calibration"
+    test_config["voltage_config"] = {"preamp_1": -49, "preamp_2": -49,"preamp_3": -49,"preamp_4": -49,"preamp_5": -49}
+    test_config["temperature"] = -98
 
-#     test_calibration = SingleCalibration(test_config, calibration=True)
+    test_calibration = SingleCalibration(test_config, calibration=True)
 
         
         
