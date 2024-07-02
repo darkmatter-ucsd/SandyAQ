@@ -34,50 +34,6 @@ class SingleCalibration:
         
         self.run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ/sandyaq/build/sandyaq"
         
-        # global variables
-        # self.threshold_multiplier = 3.5 * np.ones(24) # for 46 V
-        # self.threshold_multiplier = 5 * np.ones(24) # haven't find it useful yet
-
-        # # for 49 V
-        # self.threshold_multiplier = 4 * np.sqrt(2) * np.ones(24) 
-        # self.threshold_multiplier[0] = 3.5
-        # self.threshold_multiplier[3] = 6.5
-        # self.threshold_multiplier[4] = 6.5
-        # self.threshold_multiplier[5] = 4.5
-        # self.threshold_multiplier[6] = 3.0
-        # self.threshold_multiplier[9] = 3.5
-        # self.threshold_multiplier[10] = 2.5
-        # self.threshold_multiplier[12] = 4.5
-        # self.threshold_multiplier[13] = 6.0
-        # self.threshold_multiplier[15] = 4.0
-        # self.threshold_multiplier[16] = 6.0
-        # self.threshold_multiplier[17] = 4.0
-        # self.threshold_multiplier[18] = 4.5
-        # self.threshold_multiplier[19] = 5.8
-        # self.threshold_multiplier[21] = 3.5
-        # self.threshold_multiplier[22] = 4.8
-
-        # # for 48 V
-        # self.threshold_multiplier = 4 * np.sqrt(2) * np.ones(24) 
-        # self.threshold_multiplier[0] = 4.0
-        # self.threshold_multiplier[1] = 3.8
-        # self.threshold_multiplier[3] = 6.0
-        # self.threshold_multiplier[4] = 6.5
-        # self.threshold_multiplier[5] = 4.5
-        # self.threshold_multiplier[6] = 3.0
-        # self.threshold_multiplier[7] = 3.5
-        # self.threshold_multiplier[9] = 3.5
-        # self.threshold_multiplier[10] = 3.0
-        # self.threshold_multiplier[12] = 4.0
-        # self.threshold_multiplier[13] = 5.5
-        # self.threshold_multiplier[15] = 4.0
-        # self.threshold_multiplier[16] = 5.5
-        # self.threshold_multiplier[17] = 3.5
-        # self.threshold_multiplier[18] = 4.0
-        # self.threshold_multiplier[19] = 5.0
-        # self.threshold_multiplier[21] = 3.5
-        # self.threshold_multiplier[22] = 4.5
-
         # check if the data_taking_settings is a dictionary, and have all of the required keys
         if not isinstance(data_taking_settings, dict):
             raise ValueError("data_taking_settings should be a dictionary")
@@ -188,9 +144,13 @@ class SingleCalibration:
 
         self.tmp_config_files = self.generate_temp_configs(calibration=False)
         
+   # for multi-threading and timeout
+    def run_executable(self, e, tmp_config_file, base_path, data_file_name):
+        os.system(f"{self.run_sandyaq_command} -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
+        if e.isSet():
+            print("Timeout")
+            os.system(f"pkill -f {self.run_sandyaq_command}")
     
-
-
     def run(self, dry_run = False, calibration = False):
         
         # get the current timestamp, and add it to the file name
@@ -210,7 +170,7 @@ class SingleCalibration:
 
         # run sandyaq to take data
         # the executable is in: /home/daqtest/DAQ/SandyAQ/sandyaq/build
-        run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ/sandyaq/build/sandyaq"
+        # run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ/sandyaq/build/sandyaq"
 
         for tmp_config_file in tqdm(self.tmp_config_files):
             # -c: config file
@@ -230,20 +190,52 @@ class SingleCalibration:
             
             start_timestamp = datetime.datetime.now()
 
+            e = threading.Event()
+            exit_current_loop = False
+
             if not dry_run:
-                try:
-                    print(f"Taking data with config file: {tmp_config_file}")
-                    os.system(f"{run_sandyaq_command} -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
-                except Exception as e:
-                    print(f"Error running sandyaq: {e}")
+                print(f"Taking data with config file: {tmp_config_file}")
+
+                t = threading.Thread(target=self.run_executable, args=(e, tmp_config_file, base_path, data_file_name))
+                
+                t.start()
+                t.join(timeout=3600)
+                if t.is_alive():
+                    print(f"Timeout: killing the thread")
+                    e.set()
+
+                    # remove the corrupted data file
+                    files_to_be_removed = glob.glob(os.path.join(base_path, f"{data_file_name}*.bin"))
+                    for _file in files_to_be_removed:
+                        print(f"Removing file: {_file}")
+                        os.remove(_file)
+
+                    exit_current_loop = True
+                    
+                else:
+                    print(f"Thread finished")
+                
+                # Thread can still be alive at this point. Do another join without a timeout 
+                # to verify thread shutdown.
+                # https://stackoverflow.com/questions/34562473/most-pythonic-way-to-kill-a-thread-after-some-period-of-time
+                t.join()
+
+                if exit_current_loop:
+                    continue
+
+
             else:
                 print(f"Running sandyaq -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
+
+                # This is not doing anything?? -> Yue
+                raise ValueError("Dry run not implemented yet. Please set dry_run to False. Exiting...")
         
             end_timestamp = datetime.datetime.now()
 
             meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
 
             self.data_taking_settings["runtime"] = str(end_timestamp - start_timestamp)
+            self.data_taking_settings["start_timestamp"] = str(start_timestamp)
 
             with open(meta_file_name, "w") as f:
                 json.dump(self.data_taking_settings, f, indent=4)
@@ -350,8 +342,11 @@ if __name__ == "__main__":
     test_config["output_folder"] = "./test_calibration"
     test_config["voltage_config"] = {"preamp_1": -49, "preamp_2": -49,"preamp_3": -49,"preamp_4": -49,"preamp_5": -49}
     test_config["temperature"] = -98
+    test_config["threshold_multiplier"] = 3.5
 
-    test_calibration = SingleCalibration(test_config, calibration=True)
+
+    test_calibration = SingleCalibration(test_config, calibration=False)
+    test_calibration.run(dry_run=False)
 
         
         
