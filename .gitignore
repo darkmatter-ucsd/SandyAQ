@@ -14,7 +14,7 @@ softlink_to_data
 *.bin
 *.json
 *.csv
-
+run_selection_single_channel
 
 # But include abc.csv
-!run_info_single_channel.csv
+# !run_info_single_channel.csv
