@@ -8,6 +8,7 @@ import numpy as np
 import configparser
 import sys
 import datetime
+import csv
 
 from dataclasses import dataclass, field
 
@@ -136,36 +137,37 @@ def single_data_file_to_dict(file_path: str) -> dict:
                 
                 _tmp = meta_data.get("number_of_events")
                 if _tmp != None:
-                    info.number_of_events = int(meta_data.get("number_of_events"))
+                    info.number_of_events = int(meta_data.get("number_of_events")) # FIXME: number_of_events is not saved as integer
+                # info.number_of_events = int(info.number_of_events) # FIXME: number_of_events is not saved as integer
                 
                 # Run tag: whether run_tag is str or list in meta_data file -> into list of run tags
                 _tmp = meta_data.get("run_tag")
-                _tmp_list = []
+                _tmp__list = []
                 if _tmp != None:
                     _run__tag = _tmp
                     if type(_run__tag) == list:
                         for i in _run__tag:
-                            _tmp_list.append(i)
+                            _tmp__list.append(i)
                     elif type(_run__tag) == str:
-                        _tmp_list.append(_run__tag)
+                        _tmp__list.append(_run__tag)
                     else:
                         raise TypeError
                 elif (os.path.dirname(info.file_path).find("/threshold_calibration") != -1):
-                    _tmp_list.append("threshold_calibration")
+                    _tmp__list.append("threshold_calibration")
                 else:
-                    _tmp_list.append("GXe/gain_calibration") # started out with GXe calibration and didn't have run_tag in the meta file
+                    _tmp__list.append("GXe/gain_calibration") # started out with GXe calibration and didn't have run_tag in the meta file
 
                 # FIXME: hard-code tag
                 _split_file_path = info.file_path.split("/")
                 _split_file_path = "/".join(_split_file_path[3:]) # remove /home/daqtest/ or path for home for (**)
                 
                 if "trash" in info.file_path: 
-                    _tmp_list.append("trash")
+                    _tmp__list.append("trash")
                     
                 if "test" in _split_file_path: # ref(**)
-                    _tmp_list.append("test")
+                    _tmp__list.append("test")
                     
-                info.run_tag = "|".join(_tmp_list)
+                info.run_tag = "|".join(_tmp__list)
 
                 if (meta_data.get("run_tag") == None):
                     new_meta_data = meta_data.copy()
@@ -285,7 +287,7 @@ def data_files_to_csv(data_files: List[str], existing_df: pd.DataFrame = None, r
         # write the header to csv file
         print(f"Processing {len(data_files)} new files")
         data_df = pd.DataFrame(columns=info.__dict__.keys())
-        data_df.iloc[:0].to_csv(RUN_INFO_FILE, index=False) #FIXME: why :0?
+        data_df.iloc[:0].to_csv(RUN_INFO_FILE, index=False, quoting=csv.QUOTE_MINIMAL)
     else:
         print("No new files to process")
         return
@@ -303,7 +305,8 @@ def data_files_to_csv(data_files: List[str], existing_df: pd.DataFrame = None, r
         # Create a DataFrame from the new data -> csv; write to file in append mode
         if data != None:
             new_df = pd.DataFrame.from_dict([data])
-            new_df.to_csv(RUN_INFO_FILE, mode='a', index=False, header=False)
+            new_df.to_csv(RUN_INFO_FILE, mode='a', index=False, 
+                          header=False, quoting=csv.QUOTE_NONNUMERIC)
 
     # Main loop to process the data in chunks
     # for i in range(0, len(data_files), chunk_size):
@@ -361,7 +364,7 @@ def main():
     run_info_df["run_id"] = run_info_df.index + 1
 
     # Save the updated run_info DataFrame to RUN_INFO_FILE
-    run_info_df.to_csv(RUN_INFO_FILE, index=False)
+    run_info_df.to_csv(RUN_INFO_FILE, index=False, quoting=csv.QUOTE_NONNUMERIC)
 
     print("Run info DataFrame updated and saved to", RUN_INFO_FILE)
 
