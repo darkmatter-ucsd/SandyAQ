@@ -5,17 +5,16 @@ Digitizer::Digitizer(std::string& sConfigFile, CommonConfig_t &CommonConfig, con
     int ret = 0;
 
     m_CommonConfig = CommonConfig;
-    std::vector<int> boardIndices;
+    // std::vector<int> m_iBoardIndices;
 
     for (int n=0; n < m_CommonConfig.sBoardTypes.size(); n++) {
         if (m_CommonConfig.sBoardTypes[n] == BoardTypeName){
             m_iNBoards++;
-            boardIndices.push_back(n);
+            m_iBoardIndices.push_back(n);
         }
     }
 
-    // for (int i = iBoardStart; i < m_iNBoards+iBoardStart; i++){
-    for (int i : boardIndices) {
+    for (int i : m_iBoardIndices) {
         std::cout << i << "\n";
         std::string sBoardCategory = "BOARD-"+std::to_string(i);
 
@@ -33,7 +32,7 @@ Digitizer::Digitizer(std::string& sConfigFile, CommonConfig_t &CommonConfig, con
         // m_iLinkValues.push_back(r.GetVector<uint32_t>(sBoardCategory, "OPEN_VALUES"));
         m_iLinkValues.push_back(iLinkValues);
         m_iOpenChannels.push_back(r.GetVector<uint32_t>(sBoardCategory, "CHANNEL_LIST"));
-        m_iCoincidences[i] = r.Get<uint32_t>(sBoardCategory, "COINCIDENCE");
+        // m_iCoincidences[i] = r.Get<uint32_t>(sBoardCategory, "COINCIDENCE");
         // m_iPulsePolarity[i] = r.Get<uint32_t>(sBoardCategory, "PULSE_POLARITY");
         m_iETTT[i] = r.Get<uint32_t>(sBoardCategory, "EXTENDED_TTT");
         std::string ExtTrgMode = r.Get<std::string>(sBoardCategory, "EXTERNAL_TRIGGER");
@@ -42,6 +41,7 @@ Digitizer::Digitizer(std::string& sConfigFile, CommonConfig_t &CommonConfig, con
 
         m_iEnableMask[i] = 0;
 
+        //NOTE: For x742 models, these refer to the channel GROUPS.But m_iNChannels is still a multiple of 8
         std::vector<uint32_t> iDCOffsets;
         std::vector<uint32_t> iTriggerThresholds;
         std::map<uint32_t,CAEN_DGTZ_TriggerMode_t> sTriggerSettings;
@@ -49,14 +49,34 @@ Digitizer::Digitizer(std::string& sConfigFile, CommonConfig_t &CommonConfig, con
         for (const uint32_t ch : m_iOpenChannels[i]) {
             std::string sBoardChannel = sBoardCategory+"_CHANNEL-"+std::to_string(ch);
             m_iEnableMask[i] += 1 << ch;
-            int iDCValue = r.Get<int>(sBoardChannel, "DC_OFFSET");
+            int iDCValue;
+            try{
+                iDCValue = r.Get<int>(sBoardChannel, "DC_OFFSET");
+            } catch (const std::runtime_error& e) {
+                std::cerr << "WARNING: DC_OFFSET is not applied to board " << i << " channel "<< ch<<", maybe this model doesn't have this option.\n";
+                iDCValue = 0;
+            }
+
             iDCValue = (int)((iDCValue + 50) * 65535 / 100);
             iDCOffsets.push_back(iDCValue);
 
-            uint32_t iTrigThresh = r.Get<uint32_t>(sBoardChannel, "TRIGGER_THRESHOLD");
+            uint32_t iTrigThresh;
+            try{
+                iTrigThresh = r.Get<uint32_t>(sBoardChannel, "TRIGGER_THRESHOLD");
+            } catch (const std::runtime_error& e) {
+                std::cerr << "WARNING: TRIGGER_THRESHOLD is not applied to board " << i << " channel "<< ch<<", maybe this model doesn't have this option.\n";
+                iTrigThresh = 0;
+            }
             iTriggerThresholds.push_back(iTrigThresh);
 
-            std::string sTrigSet = r.Get<std::string>(sBoardChannel, "CHANNEL_TRIGGER");
+            std::string sTrigSet;
+            try{
+                sTrigSet = r.Get<std::string>(sBoardChannel, "CHANNEL_TRIGGER");
+            } catch(const std::runtime_error& e) {
+                std::cerr << "WARNING: CHANNEL_TRIGGER is not applied to board " << i << " channel "<< ch<<", maybe this model doesn't have this option.\n";
+                sTrigSet = "DISABLED";
+            }
+            
             // sTriggerSettings.push_back(TriggerModeMap[sTrigSet]);
             sTriggerSettings[ch] = TriggerModeMap[sTrigSet];
 

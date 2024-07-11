@@ -4,6 +4,20 @@ V1725::~V1725() {
     Quit();
 }
 
+int V1725::ReadX725SpecificParams(){
+    inih::INIReader r{ m_sConfigFile };
+    int ret = 0;
+
+    for (int i : m_iBoardIndices) {
+        std::cout << i << "\n";
+        std::string sBoardCategory = "BOARD-"+std::to_string(i);
+        m_iRecordLength.push_back(r.Get<uint32_t>(sBoardCategory, "RECORD_LENGTH"));
+        m_iCoincidences[i] = r.Get<uint32_t>(sBoardCategory, "COINCIDENCE");
+    }
+
+    return ret;
+}
+
 int V1725::ProgramDigitizers() {
     int ret = 0;
     for (int i = 0; i < m_iNBoards; i++) {
@@ -48,10 +62,10 @@ int V1725::ProgramDefault(int BoardNum) {
     }
 
     //Set record length
-    ret |= CAEN_DGTZ_SetRecordLength(handle, m_CommonConfig.uiRecordLength);
+    ret |= CAEN_DGTZ_SetRecordLength(handle, m_iRecordLength[BoardNum]);
     PrintError(BoardNum, "Setting", "record length", ret);
-    ret |= CAEN_DGTZ_GetRecordLength(handle, &m_CommonConfig.uiRecordLength);
-    std::cout << "Record length is " << m_CommonConfig.uiRecordLength << " samples\n";
+    ret |= CAEN_DGTZ_GetRecordLength(handle, &m_iRecordLength[BoardNum]);
+    std::cout << "Record length is " << m_iRecordLength[BoardNum] << " samples\n";
 
     //Set post trigger
     ret |= CAEN_DGTZ_SetPostTriggerSize(handle, m_iPostTriggers[BoardNum]);

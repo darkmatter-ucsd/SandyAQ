@@ -1,5 +1,6 @@
 #include "Ini.hh"
 #include "V1725.hh"
+#include "V1742.hh"
 // #include "Utils.hh"
 #include "GlobalControl.hh"
 #include "CommonConfig.hh"
@@ -66,8 +67,10 @@ int main(int argc, char* argv[]) {
         if (pair.first == "V1725") {
             V1725* dgtz = new V1725(sConfigFile, config);
             digitizers.push_back(dgtz);
-            std::cout << dgtz->m_iHandles[0] << "\n";
-            std::cout << dgtz->m_iHandles[1] << "\n";
+        }
+        else if (pair.first == "V1742") {
+            V1742* dgtz = new V1742(sConfigFile, config);
+            digitizers.push_back(dgtz);
         }
         //TO DO: Add else if statements for V1720s
     }
@@ -81,15 +84,19 @@ int main(int argc, char* argv[]) {
         PrintVec1d(dgtz->m_sLinkTypes);
         PrintVec2d(dgtz->m_iLinkValues);
         std::cout << (dgtz->m_iEnableMask[0]) << " " << (dgtz->m_iEnableMask[1]) << "\n";
-    }
-    
+    }   
+    std::cout << "Programmed the digitizers\n";
 
-    ret = SetSyncMode(digitizers, &config);
-    if (ret!=0) {
-        std::cout <<"ERROR in setting the synchronization mode of the digitizers"<<std::endl;
-        exit(EXIT_FAILURE);
+    if (iNTotBoards>1){
+        ret = SetSyncMode(digitizers, &config);
+        if (ret!=0) {
+            std::cout <<"ERROR in setting the synchronization mode of the digitizers"<<std::endl;
+            exit(EXIT_FAILURE);
+        }
     }
-    
+    std::cout << digitizers.size();
+    std::cout << "Set synchronization \n";
+
     //Allocate readout buffer
     int iTotBoardIndex = 0;
     uint32_t iAllocatedSize;
@@ -114,7 +121,7 @@ int main(int argc, char* argv[]) {
     //set the output file
     FILE* event_file[iNTotBoards] = {NULL};
     for (int i = 0; i < iNTotBoards; i++){
-        std::string eventFileName = sOutputFile + std::to_string(i) + ".bin";
+        std::string eventFileName = sOutputFile + "board_" + std::to_string(i) + ".bin";
         event_file[i] = fopen(eventFileName.c_str(), "w");
     }
     
