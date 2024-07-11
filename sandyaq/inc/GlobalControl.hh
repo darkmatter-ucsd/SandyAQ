@@ -37,6 +37,18 @@ static int SetSyncMode(std::vector<Digitizer*> &Boards, CommonConfig_t* commonCo
     for (int bt = 0; bt<Boards.size(); bt++){
         Digitizer* boards = Boards[bt];
         for (int b = 0; b < boards->m_iNBoards; b++){
+            /*****************************************************************/
+            /* There are many configuration modes available. The first three */
+            /* modes are different ways to share a trigger as described in   */
+            /* the CAEN synchronization manual (not for the V1742). However, */
+            /* the synchronization mode that will most commonly be used is   */
+            /* the LVDS synchronization, as this method propagates the busy  */
+            /* signal across multiple boards. The LVDS synchronization is a  */
+            /* bit different for each digitizer, as such, they are           */
+            /* programmed according to the internal method SetLVDSSync() in  */
+            /* the Digitizer class.                                          */
+            /*****************************************************************/
+
             if (commonConfig->SyncMode == "COMMONT_EXTERNAL_TRIGGER_TRGIN_TRGOUT") {
                 std::cout <<"Programming synchronization mode for a common external trigger\n";
                 if ((b == 0)&&(bt == 0)) {// inhibit TRGIN on board 0 in order to avoid start of run with external triggers
@@ -116,35 +128,8 @@ static int SetSyncMode(std::vector<Digitizer*> &Boards, CommonConfig_t* commonCo
                 // continue;
             }
             else if (commonConfig->SyncMode == "LVDS_SYNC") {
-                //This one write register is pretty complicated, let's summarize it:
-                //  1) Enables LVDS couple 0-3 as input
-                //  2) Enables LVDS couple 4-7 as output
-                //  3) TRG OUT propagates motherboard signals (bits [17:16])
-                //  4) Signal that is propagated is busy (bits[19:18])
-                //  5) Use extended trigger time stamp (BECAUSE WHY WOULD YOU NOT USE IT??? SERIOUSLY, USE IT!!!)
-                ret |= CAEN_DGTZ_ReadRegister(boards->m_iHandles[b], 0x811C, &reg);
-                ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x811C, reg | 0x4d0138);
-
-                //Set start with either software or LVDS
-                ret |= CAEN_DGTZ_ReadRegister(boards->m_iHandles[b], 0x8100, &reg);
-                if ((b == 0)&&(bt == 0)){
-                    ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x8100, reg | (0x00000100));
-                }
-			    else {
-                    ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x8100, reg | (0x00000107));
-                }
-
-                //BUSY signal is raised by having some set number of buffers (set at 0x816C) being full
-                //0x800C is the number of buffers (set by programming the record length)
-                ret |= CAEN_DGTZ_ReadRegister(boards->m_iHandles[b], 0x800C, &reg);
-                ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x816C, (uint32_t)(pow(2., reg) - 10));
-
-                //Timestamp offset
-                ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x8170, 3 * (totalBoards - 1 - totalBoardIndex) + (totalBoardIndex == 0 ? -1 : 0));
-
-                // register 0x81A0: select the lowest two quartet as "nBUSY/nVETO" type. BEWARE: set ALL the quartet bits to 2
-                ret |= CAEN_DGTZ_ReadRegister(boards->m_iHandles[b], 0x81A0, &reg);
-                ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], 0x81A0, reg | 0x00002222);
+                int isMaster = ((bt==0)&&(b==0)) ? 1 : 0;
+                ret |= boards->SetLVDSSync(b, isMaster, totalBoardIndex, totalBoards);
             }
             else{
                 return -1;
@@ -201,7 +186,10 @@ static int StartRun(std::vector<Digitizer*> &Boards, CommonConfig_t* commonConfi
             return ret;
         }
         else if (commonConfig->SyncMode == "LVDS_SYNC") {
-            //
+            CAEN_DGTZ_SWStartAcquisition(masterBoard->m_iHandles[0]);
+        }
+        else{
+            return -1;
         }
     }
     else{
@@ -228,7 +216,7 @@ int StopRun(std::vector<Digitizer*> &Boards, CommonConfig_t* commonConfig)
             }
             return ret;
         }
-        if (commonConfig->SyncMode == "INDIVIDUAL_TRIGGER_SIN_TRGOUT") {
+        else if (commonConfig->SyncMode == "INDIVIDUAL_TRIGGER_SIN_TRGOUT") {
             Digitizer* masterBoard = Boards[0];
             ret |= CAEN_DGTZ_WriteRegister(masterBoard->m_iHandles[0], ADDR_ACQUISITION_MODE, 0x0);
             PrintError(0, "Writng", "Register[ADDR_ACQUISITION_MODE]", ret);

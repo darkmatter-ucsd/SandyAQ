@@ -162,3 +162,4 @@ int Digitizer::OpenDigitizers() {
 
 int Digitizer::ProgramDigitizers() {}
 void Digitizer::Quit() {}
+int Digitizer::SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards) {}

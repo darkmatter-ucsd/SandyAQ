@@ -146,3 +146,41 @@ int V1742::ProgramDefault(int BoardNum) {
     return ret;
 }
 
+int V1742::SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards) {
+    int ret = 0;
+    uint32_t reg;
+    uint32_t orreg;
+    int handle = m_iHandles[BoardNum];
+
+    //ADDR_ACQUISITION_MODE is 0x8100
+    //Bit 8 enables the Busy input, Bits [0:1] sets the start mode
+    //where 11 is LVDS controlled and 00 is software controlled.
+    //  - Slaves are LVDS start mode controlled
+    //  - Master is software controlled
+    //Bit 2 arms the slave digitizers
+    ret |= CAEN_DGTZ_ReadRegister(handle, 0x8100, &reg);
+    orreg = (isMaster) ? 0x100 : 0x107;
+    reg |= orreg;
+    ret |= CAEN_DGTZ_WriteRegister(handle, 0x8100, reg);
+
+    //ADDR_LVDS_NEW_FEATURES is 
+    //Enables nBusy/nVeto New Features
+    ret |= CAEN_DGTZ_ReadRegister(handle, 0x81A0, &reg);
+    reg |= 0x22;
+    ret |= CAEN_DGTZ_WriteRegister(handle, 0x81A0, reg);
+
+    //ADDR_FRONT_PANEL_IO_SET is 0x811C
+    //Bits 16:19 just sets propagation to TRG OUT, not strictly necessary
+    ret |= CAEN_DGTZ_ReadRegister(handle, 0x811C, &reg);
+    orreg = (isMaster) ? 0x104 : 0xD0104;
+    reg |= orreg;
+    ret |= CAEN_DGTZ_WriteRegister(handle, 0x811C, reg);
+
+    //ADDR_RUN_DELAY is 
+    //Set Run Delay
+    ret |= CAEN_DGTZ_ReadRegister(handle, ADDR_RUN_DELAY, &reg);
+    reg |= 2 * (iTotalNBoards - 1 - iDaisyChainNum);
+    ret |= CAEN_DGTZ_WriteRegister(handle, ADDR_RUN_DELAY, reg);
+
+    return ret;
+}

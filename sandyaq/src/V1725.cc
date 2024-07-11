@@ -190,3 +190,41 @@ int V1725::ProgramDefault(int BoardNum) {
 int V1725::ProgramDAW(int BoardNum) {
 
 };
+
+int V1725::SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards) {
+        //This one write register is pretty complicated, let's summarize it:
+    //  1) Enables LVDS couple 0-3 as input
+    //  2) Enables LVDS couple 4-7 as output
+    //  3) TRG OUT propagates motherboard signals (bits [17:16])
+    //  4) Signal that is propagated is busy (bits[19:18])
+    //  5) Use extended trigger time stamp (BECAUSE WHY WOULD YOU NOT USE IT??? SERIOUSLY, USE IT!!!)
+    int handle = m_iHandles[BoardNum];
+    uint32_t ret = 0;
+    uint32_t reg;
+
+    ret |= CAEN_DGTZ_ReadRegister(handle, 0x811C, &reg);
+    ret |= CAEN_DGTZ_WriteRegister(handle, 0x811C, reg | 0x4d0138);
+
+    //Set start with either software or LVDS
+    ret |= CAEN_DGTZ_ReadRegister(handle, 0x8100, &reg);
+    if (isMaster){
+        ret |= CAEN_DGTZ_WriteRegister(handle, 0x8100, reg | (0x00000100));
+    }
+    else {
+        ret |= CAEN_DGTZ_WriteRegister(handle, 0x8100, reg | (0x00000107));
+    }
+
+    //BUSY signal is raised by having some set number of buffers (set at 0x816C) being full
+    //0x800C is the number of buffers (set by programming the record length)
+    ret |= CAEN_DGTZ_ReadRegister(handle, 0x800C, &reg);
+    ret |= CAEN_DGTZ_WriteRegister(handle, 0x816C, (uint32_t)(pow(2., reg) - 10));
+
+    //Timestamp offset
+    ret |= CAEN_DGTZ_WriteRegister(handle, 0x8170, 3 * (iTotalNBoards - 1 - iDaisyChainNum) + (iDaisyChainNum == 0 ? -1 : 0));
+
+    // register 0x81A0: select the lowest two quartet as "nBUSY/nVETO" type. BEWARE: set ALL the quartet bits to 2
+    ret |= CAEN_DGTZ_ReadRegister(handle, 0x81A0, &reg);
+    ret |= CAEN_DGTZ_WriteRegister(handle, 0x81A0, reg | 0x00002222);
+
+    return ret;
+}

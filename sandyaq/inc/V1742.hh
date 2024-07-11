@@ -29,7 +29,7 @@ class V1742 : public Digitizer{
         int ReadX742SpecificParams();
         int ProgramDigitizers();
         int ProgramDefault(int BoardNum);
-        
+        int SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards);
 
         void Quit();
 

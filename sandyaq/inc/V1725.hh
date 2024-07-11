@@ -31,6 +31,7 @@ class V1725 : public Digitizer{
         int ProgramDigitizers();
         int ProgramDefault(int BoardNum);
         int ProgramDAW(int BoardNum);
+        int SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards);
 
         // int SetSyncMode(int *handle);
         // int StartRun(int *handle);

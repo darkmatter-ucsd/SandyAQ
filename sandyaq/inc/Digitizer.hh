@@ -26,6 +26,7 @@ class Digitizer {
         
         //Needs to be set per digitizer
         virtual int ProgramDigitizers();
+        virtual int SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards);
         virtual void Quit();
 
         //Map for Trigger Modes
