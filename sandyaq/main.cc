@@ -133,47 +133,69 @@ int main(int argc, char* argv[]) {
     uint64_t ElapsedTime[iNTotBoards];
     uint32_t Nb[iNTotBoards]={0}, Ne[iNTotBoards]={0};
     
-    StartRun(digitizers, &config);
-    for (int i = 0; i < iNTotBoards; i++) {
-        PrevRateTime[i] = get_time();
-    }
-    
-    while(iNumEventsAcquired[0] < iNEventsTotal){
-        iTotBoardIndex = 0;
-        for (Digitizer* dgtz : digitizers) {
-            for (int i = 0; i < dgtz->m_iNBoards; i++){
-                ret = CAEN_DGTZ_ReadData(dgtz->m_iHandles[i], CAEN_DGTZ_SLAVE_TERMINATED_READOUT_MBLT, buffer[iTotBoardIndex], &iBufferSize);
-                PrintError(iTotBoardIndex, "Reading Events", "buffer", ret);
-                // printf("Buffer Size: %d\n",iBufferSize);
-                if (iBufferSize != 0) {
-                    ret = CAEN_DGTZ_GetNumEvents(dgtz->m_iHandles[i], buffer[iTotBoardIndex], iBufferSize, &iNumEvents);
-                    PrintError(iTotBoardIndex, "Getting Number of Events", "buffer", ret);
-                    fwrite(buffer[iTotBoardIndex], 1, iBufferSize, event_file[iTotBoardIndex]);
-                    Nb[iTotBoardIndex] += iBufferSize;
-                    Ne[iTotBoardIndex] += iNumEvents;
-                    iNumEventsAcquired[iTotBoardIndex] +=iNumEvents;
-                }
+    RunControlVars_t runcontrol;
+    runcontrol.quit=0;
+    runcontrol.start=0;
+    runcontrol.acquiring=0;
 
+    std::cout<<"\nPress: [s] to start/stop acquiring, [q] to quit\n";
+    while (!runcontrol.quit){
 
-                CurrentTime = get_time();
-                ElapsedTime[iTotBoardIndex] = CurrentTime - PrevRateTime[iTotBoardIndex];
+        CheckKeyboardCommands(&runcontrol);
 
-                if (ElapsedTime[iTotBoardIndex] > 1000) {
-                    if (Nb[iTotBoardIndex] == 0)
-                        if (ret == CAEN_DGTZ_Timeout) printf ("Timeout...\n"); else printf("No data...\n");
-                    else
-                        printf("Reading from board %d at %.2f MB/s (Trg Rate: %.2f Hz)\n", iTotBoardIndex, (float)Nb[iTotBoardIndex]/((float)ElapsedTime[iTotBoardIndex]*1048.576f), (float)Ne[iTotBoardIndex]*1000.0f/(float)ElapsedTime[iTotBoardIndex]);
-                        Nb[iTotBoardIndex] = 0;
-                        Ne[iTotBoardIndex] = 0;
-                        PrevRateTime[iTotBoardIndex] = CurrentTime;
+        if ((!runcontrol.acquiring)&&(runcontrol.start)){
+            StartRun(digitizers, &config);
+            for (int i = 0; i < iNTotBoards; i++) {
+                PrevRateTime[i] = get_time();
+            }
+            runcontrol.acquiring=1;
+        }
+        
+        if (runcontrol.acquiring){
+            iTotBoardIndex = 0;
+            for (Digitizer* dgtz : digitizers) {
+                for (int i = 0; i < dgtz->m_iNBoards; i++){
+                    ret = CAEN_DGTZ_ReadData(dgtz->m_iHandles[i], CAEN_DGTZ_SLAVE_TERMINATED_READOUT_MBLT, buffer[iTotBoardIndex], &iBufferSize);
+                    PrintError(iTotBoardIndex, "Reading Events", "buffer", ret);
+                    // printf("Buffer Size: %d\n",iBufferSize);
+                    if (iBufferSize != 0) {
+                        ret = CAEN_DGTZ_GetNumEvents(dgtz->m_iHandles[i], buffer[iTotBoardIndex], iBufferSize, &iNumEvents);
+                        PrintError(iTotBoardIndex, "Getting Number of Events", "buffer", ret);
+                        fwrite(buffer[iTotBoardIndex], 1, iBufferSize, event_file[iTotBoardIndex]);
+                        Nb[iTotBoardIndex] += iBufferSize;
+                        Ne[iTotBoardIndex] += iNumEvents;
+                        iNumEventsAcquired[iTotBoardIndex] +=iNumEvents;
                     }
 
-                iTotBoardIndex++;
+
+                    CurrentTime = get_time();
+                    ElapsedTime[iTotBoardIndex] = CurrentTime - PrevRateTime[iTotBoardIndex];
+
+                    if (ElapsedTime[iTotBoardIndex] > 1000) {
+                        if (Nb[iTotBoardIndex] == 0)
+                            if (ret == CAEN_DGTZ_Timeout) printf ("Timeout...\n"); else printf("No data...\n");
+                        else
+                            printf("Reading from board %d at %.2f MB/s (Trg Rate: %.2f Hz)\n", iTotBoardIndex, (float)Nb[iTotBoardIndex]/((float)ElapsedTime[iTotBoardIndex]*1048.576f), (float)Ne[iTotBoardIndex]*1000.0f/(float)ElapsedTime[iTotBoardIndex]);
+                            Nb[iTotBoardIndex] = 0;
+                            Ne[iTotBoardIndex] = 0;
+                            PrevRateTime[iTotBoardIndex] = CurrentTime;
+                            std::cout <<"Acquisition status: "<<runcontrol.start<<"\n";
+                        }
+                        // std::cout <<"Acquisition status: "<<runcontrol.start<<"\n";
+
+                    iTotBoardIndex++;
+                }
             }
         }
+
+        if (iNumEventsAcquired[0] >= iNEventsTotal){
+            runcontrol.start=0;
+            runcontrol.quit=1;
+        }
+        
+        if (((!runcontrol.start)&&(runcontrol.acquiring))||((runcontrol.quit)&&(runcontrol.acquiring)))
+            StopRun(digitizers, &config);
     }
-    
-    StopRun(digitizers, &config);
 
     for (int i = 0; i < iNTotBoards; i++){
         fclose(event_file[i]);
