@@ -80,7 +80,8 @@ class SingleCalibration:
         if calibration:
             data_settings = self.data_taking_settings.copy()
             # set a very low threshold for all channels, to take noise data
-            data_settings["channel_threshold_dict"] = {0:2305,1:2269,2:2395,3:2209,4:2378,5:2274,6:2386,7:2516,8:2627,9:2316,10:2162,11:2166,12:2456,13:2456,14:2413,15:2192,16:2230,17:2468,18:2158,19:2090,20:2342,21:2258,22:2313,23:2266}
+            # data_settings["channel_threshold_dict"] = {0:2305,1:2269,2:2200,3:2209,4:2378,5:2274,6:2386,7:2516,8:2627,9:2316,10:2162,11:2066,12:2456,13:2446,14:2413,15:2192,16:2230,17:2468,18:2158,19:2090,20:2342,21:2258,22:2313,23:2266}
+            data_settings["channel_threshold_dict"] = {0:2297,1:2269,2:2200,3:2209,4:2378,5:2274,6:2386,7:2516,8:2585,9:2305,10:2162,11:2066,12:2414,13:2446,14:2277,15:2192,16:2230,17:2468,18:2158,19:2090,20:2280,21:2258,22:2313,23:2233}
             data_settings["number_of_events"] = self.n_calibration_events
             data_settings["output_folder"] = data_settings["output_folder"] + "/threshold_calibration"
             data_settings["run_tag"] = "threshold_calibration"
@@ -95,6 +96,7 @@ class SingleCalibration:
         # first: make a tmp folder to store the temp config files
         if not os.path.exists(temp_folder):
             os.makedirs(temp_folder)
+            
         tmp_config_files = []
         for channel in data_settings["channel_threshold_dict"].keys():
             new_config_path = os.path.join(temp_folder, f"config_{channel}_{data_settings['channel_threshold_dict'][channel]}.ini")
@@ -199,7 +201,7 @@ class SingleCalibration:
                 t = threading.Thread(target=self.run_executable, args=(e, tmp_config_file, base_path, data_file_name))
                 
                 t.start()
-                t.join(timeout=3600)
+                t.join(timeout=7200)
                 if t.is_alive():
                     print(f"Timeout: killing the thread")
                     e.set()
