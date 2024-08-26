@@ -1,5 +1,6 @@
 data/
 sandyaq/build
+python_wrappers/build
 processor_config/
 .vscode/
 .venv/
@@ -7,6 +8,8 @@ __pycache__/
 *.pyc
 python_wrappers/test_output/
 python_wrappers/notebooks/test_output/
+python_wrappers/run_list/
+python_wrappers/archived_run_list/
 *.png
 softlink_to_data
 *process_config.json
@@ -14,7 +17,8 @@ softlink_to_data
 *.bin
 *.json
 *.csv
-run_selection_single_channel
+run_list/
+archived_run_list/
 
 # But include abc.csv
 # !run_info_single_channel.csv

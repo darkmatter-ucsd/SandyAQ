@@ -87,7 +87,10 @@ class PostProcessing:
                  calibration_run = False):
 
         self.data_folder = data_folder
-        self.list_of_files = list_of_files
+        if type(list_of_files) == str: 
+            self.list_of_files = [list_of_files]
+        else:
+            self.list_of_files = list_of_files
         self.ignore_channel_list = ignore_channel_list
         self.calibration_run = calibration_run
 
@@ -97,29 +100,15 @@ class PostProcessing:
                                           "baseline_mean", "baseline_std", "threshold_adc", 
                                           "areas", "heights","hist_count","bin_edges",
                                           "randomly_selected_raw_WF","randomly_selected_filtered_WF"]) 
-        # self.df = pd.DataFrame({"timestamp_str":pd.Series([], dtype='str'), 
-        #                         "datetime_obj":pd.Series([], dtype='object'), 
-        #                         "channel":pd.Series([], dtype='int'),
-        #                         "bias_voltage":pd.Series([], dtype='float'),
-        #                         "n_events":pd.Series([], dtype='int'),
-        #                         "integral_window":pd.Series([], dtype='float'),
-        #                         "process_config":pd.Series([], dtype='str'),
-        #                         "start_index":pd.Series([], dtype='int'),
-        #                         "end_index":pd.Series([], dtype='int'),
-        #                         "n_processed_events":pd.Series([], dtype='int'),
-        #                         "baseline_mean":pd.Series([], dtype='float'),
-        #                         "baseline_std":pd.Series([], dtype='float'),
-        #                         "threshold_adc":pd.Series([], dtype='int'),
-        #                         "areas":pd.Series([], dtype='float'),
-        #                         "heights":pd.Series([], dtype='float'),                          
-        #                         "randomly_selected_raw_WF":pd.Series([], dtype='object'),
-        #                         "randomly_selected_filtered_WF":pd.Series([], dtype='object')}) 
                 
         #plot settings
         self.fontsize = "small"  
         
     def process_run(self):
-        self._v_process_run(self, self.list_of_files)
+        if(len(self.list_of_files))==1:
+            self.process_run_single_run(meta_data = self.list_of_files[0])
+        else:
+            self._v_process_run(self, self.list_of_files)
         return
     
     def process_run_single_run(self, meta_data):
@@ -316,9 +305,17 @@ class PostProcessing:
 
         if not self.calibration_run:
             try:
-                spe_fit = FitSPE.FitSPE(hist_count, bin_edges, plot = False, show_plot=False, save_plot=False)
-                axes[2,0].plot(np.transpose(spe_fit.line_x)[:,spe_fit.mu_err_list<0.03],np.transpose(spe_fit.line_y)[:,spe_fit.mu_err_list<0.03],color='black')
-                axes[2,0].plot(np.transpose(spe_fit.line_x)[:,spe_fit.mu_err_list>=0.03],np.transpose(spe_fit.line_y)[:,spe_fit.mu_err_list>=0.03],color='blue')
+                spe_fit = FitSPE.FitSPE(spd.bias_voltage, hist_count, bin_edges, plot = False, show_plot=False, save_plot=False)
+                if len(spe_fit.mu_list) > 0:
+                    axes[2,0].plot(np.transpose(spe_fit.line_x)[:,spe_fit.mu_err_list<0.03],np.transpose(spe_fit.line_y)[:,spe_fit.mu_err_list<0.03],color='black')
+                    axes[2,0].plot(np.transpose(spe_fit.line_x)[:,spe_fit.mu_err_list>=0.03],np.transpose(spe_fit.line_y)[:,spe_fit.mu_err_list>=0.03],color='blue')
+                    
+                    if not (np.isnan(spe_fit.spe_position) or np.isnan(spe_fit.spe_position_error)):
+                        
+                        axes[2,0].axvline(spe_fit.spe_position, color="tab:green", label=f"Gain: {spe_fit.gain}")
+                        axes[2,0].axvspan(spe_fit.spe_position - spe_fit.spe_position_error, spe_fit.spe_position + spe_fit.spe_position_error,
+                                      alpha = 0.5, color="tab:green")
+                
             except:
                 print("Could not fit SPE")
 
@@ -331,7 +328,7 @@ class PostProcessing:
 
 
         # axes[1,1].hist(heights,bins=100,range=(0,40),histtype='step')
-        axes[2,1].hist2d(spd.areas,spd.heights,bins=[200,100],range=[[-0.1,10],[0,60]],cmap='viridis',norm="log")
+        axes[2,1].hist2d(spd.areas,spd.heights,bins=[200,100],range=[[-0.1,10],[0,60]],cmap='viridis',norm='log')
         # axes[2,1].hist2d(spd.areas,spd.heights,bins=[200,100],cmap='viridis',norm="log",label="")
         axes[2,1].set_ylabel("Filtered Height [mV]",fontsize=self.fontsize)
         axes[2,1].set_xlabel("Filtered integrated area [$V\cdot ns$]",fontsize=self.fontsize)
@@ -358,7 +355,8 @@ class PostProcessing:
         if save_plot:
             plt.savefig(os.path.join(figure_path,f"plot_{spd.channel}_{spd.timestamp_str}.png"))
         
-        plt.close()
+        if not show_plot:
+            plt.close()
 
         return
     

@@ -108,7 +108,7 @@ class WFProcessor(object):
         """
         sum_start = int(self.length_per_event * sum_window[0])
         sum_end = int(self.length_per_event * sum_window[1])
-        self.areas = np.sum(self.filtered_wfs[:,sum_start:sum_end],axis=1) # unit: mV
+        self.areas = np.sum(self.filtered_wfs[:,sum_start:sum_end],axis=1) # unit: mV #really??? I think it is V
         self.areas *= 4 # now it becomes mV * ns
         if not self.polarity:
             self.areas = -self.areas

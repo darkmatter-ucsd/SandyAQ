@@ -65,8 +65,8 @@ def _re_search(pattern: str, string):
 v_re_search = np.vectorize(_re_search, excluded=["pattern"])
 
 
-def main(output_name = "./selected_runs_gain.csv"):
-    df = pd.read_csv("/home/daqtest/DAQ/SandyAQ/python_wrappers/run_selection_single_channel/run_info_single_channel.csv", 
+def main(output_name = "./gain_analysis.csv"):
+    df = pd.read_csv("/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/python_wrappers/run_info_single_channel.csv", 
                      parse_dates=["date_time"], 
                      delimiter=",",
                      quotechar='"', 
@@ -99,7 +99,9 @@ def main(output_name = "./selected_runs_gain.csv"):
 
     mask =  (info.number_of_channels == nchs) & (info.record_length_sample == record_length_sample) & (info.baseline_n_samples == sample_selection) & (info.baseline_n_samples_avg == samples_to_average)
     # check how much data is removed
-    new_info = info.apply_mask(mask)
+    info.apply_mask(mask, inplace=True)
+    
+    # new_info = info.apply_mask(mask)
 
     process_config = {"nchs": int(nchs),
                     "nsamps": int(record_length_sample),
@@ -113,16 +115,16 @@ def main(output_name = "./selected_runs_gain.csv"):
     processor= sandpro.processing.rawdata.RawData(config_file = "process_config.json",
                                                 perchannel=False)
 
-    for i in range(len(new_info)):
-        start_index = int(new_info.start_index[i])
-        end_index = int(new_info.start_index[i] + new_info.n_processed_events[i])
+    for i in range(len(info)):
+        start_index = int(info.start_index[i])
+        end_index = int(info.start_index[i] + info.n_processed_events[i])
         
-        data = processor.get_rawdata_numpy(n_evts=int(new_info.number_of_events[i])-1,
-                                file=new_info.file_path[i],
+        data = processor.get_rawdata_numpy(n_evts=int(info.number_of_events[i])-1,
+                                file=info.file_path[i],
                                 bit_of_daq=14,
                                 headersize=4,inversion=False)
         
-        wfp = WaveformProcessor.WFProcessor(os.path.dirname(new_info.file_path[i]), 
+        wfp = WaveformProcessor.WFProcessor(os.path.dirname(info.file_path[i]), 
                                             volt_per_adc=2/2**14)
         wfp.set_data(data["data_per_channel"][start_index:end_index,0], in_adc = False)
         wfp.process_wfs()
@@ -134,7 +136,7 @@ def main(output_name = "./selected_runs_gain.csv"):
         hist_count,bin_edges = np.histogram(areas,bins=200,range=(-0.1,10))
 
         # voltage_preamp1_V helps to predetermine the peak distance
-        spe_fit = FitSPE.FitSPE(new_info.voltage_preamp1_V[i], hist_count, bin_edges, show_plot=False, save_plot=False)
+        spe_fit = FitSPE.FitSPE(info.voltage_preamp1_V[i], hist_count, bin_edges, show_plot=False, save_plot=False)
         
         if not (np.isnan(spe_fit.gain) or np.isnan(spe_fit.gain_error)):
             gain_list.append(spe_fit.gain)
@@ -143,10 +145,10 @@ def main(output_name = "./selected_runs_gain.csv"):
             gain_list.append(np.nan)
             gain_err_list.append(np.nan)
         
-    new_info.__setattr__("gain", np.array(gain_list))
-    new_info.__setattr__("gain_err", np.array(gain_err_list))
+    info.__setattr__("gain", np.array(gain_list))
+    info.__setattr__("gain_err", np.array(gain_err_list))
     
-    new_df = new_info.get_df()
+    new_df = info.get_df()
     new_df.to_csv(f"{output_name}", index=False, quoting=csv.QUOTE_NONNUMERIC)
     
 if __name__ == "__main__":

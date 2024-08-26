@@ -20,6 +20,7 @@ import json
 
 import threading
 import time
+import subprocess
 
 import WaveformProcessor
 import util
@@ -45,13 +46,14 @@ class SingleCalibration:
                                                            "threshold_multiplier"]):
             raise ValueError("data_taking_settings should have all of the required keys: \
                               number_of_events, output_folder, voltage_config, temperature, threshold_multiplier")
-        self.data_taking_settings = data_taking_settings
-        self.threshold_multiplier = self.data_taking_settings["threshold_multiplier"] * np.ones(24)
-
+        self.user_input_data_taking_setting = data_taking_settings
+        self.threshold_multiplier = self.user_input_data_taking_setting["threshold_multiplier"] * np.ones(24)
+        self.timeout = 3600 # in second; kill run after this time
 
         # calibration settings
         self.n_calibration_events = 3000
         self.calibration_start_index = 2000 # cannot be lower than this
+        self.calibration_timeout = 300 # in second; kill run after this time
 
         # check if the config_template is a string and exists
         if not isinstance(config_template_path, str):
@@ -64,6 +66,9 @@ class SingleCalibration:
         self.config_template.optionxform = str
         self.config_template.read(config_template_path)
 
+        # generate the data taking settings for both calibration and data taking
+        self.generate_data_taking_settings()
+
         if calibration:
             print("Running calibration...")
             self.run_calibration()
@@ -71,35 +76,47 @@ class SingleCalibration:
             # generate the temporary config files
             self.tmp_config_files = self.generate_temp_configs()
 
+
+    def generate_data_taking_settings(self):
+
+        self.data_taking_settings = self.user_input_data_taking_setting.copy()
+        self.data_taking_settings["timeout"] = self.timeout
+        
+        self.calib_data_taking_settings = self.user_input_data_taking_setting.copy()
+        # set a very low threshold for all channels, to take noise data
+        # data_settings["channel_threshold_dict"] = {0:2305,1:2269,2:2200,3:2209,4:2378,5:2274,6:2386,7:2516,8:2627,9:2316,10:2162,11:2066,12:2456,13:2446,14:2413,15:2192,16:2230,17:2468,18:2158,19:2090,20:2342,21:2258,22:2313,23:2266}
+        self.calib_data_taking_settings["channel_threshold_dict"] = {0:2297,1:2269,2:2400,3:2360,4:2378,5:2274,6:2386,7:2516,8:2585,9:2305,10:2300,11:2066,12:2414,13:2446,14:2277,15:2192,16:2230,17:2468,18:2158,19:2090,20:2280,21:2258,22:2313,23:2233}
+        self.calib_data_taking_settings["number_of_events"] = self.n_calibration_events
+        self.calib_data_taking_settings["output_folder"] = self.user_input_data_taking_setting["output_folder"] + "/threshold_calibration"
+        self.calib_data_taking_settings["run_tag"] = "threshold_calibration"
+        self.calib_data_taking_settings["threshold_multiplier"] = 1.0
+        self.calib_data_taking_settings["timeout"] = self.calibration_timeout
+        
+        return 
+
     def generate_temp_configs(self, calibration = False):
         # the template config is an ini file. We need to do the following modifications:
         # 1. add the channel list
         # 2. add the thresholds
 
         # create a separate set of config from the given config for the threshold calibration
+
         if calibration:
-            data_settings = self.data_taking_settings.copy()
-            # set a very low threshold for all channels, to take noise data
-            # data_settings["channel_threshold_dict"] = {0:2305,1:2269,2:2200,3:2209,4:2378,5:2274,6:2386,7:2516,8:2627,9:2316,10:2162,11:2066,12:2456,13:2446,14:2413,15:2192,16:2230,17:2468,18:2158,19:2090,20:2342,21:2258,22:2313,23:2266}
-            data_settings["channel_threshold_dict"] = {0:2297,1:2269,2:2200,3:2209,4:2378,5:2274,6:2386,7:2516,8:2585,9:2305,10:2162,11:2066,12:2414,13:2446,14:2277,15:2192,16:2230,17:2468,18:2158,19:2090,20:2280,21:2258,22:2313,23:2233}
-            data_settings["number_of_events"] = self.n_calibration_events
-            data_settings["output_folder"] = data_settings["output_folder"] + "/threshold_calibration"
-            data_settings["run_tag"] = "threshold_calibration"
-
+            data_taking_settings = self.calib_data_taking_settings
         else:
-            data_settings = self.data_taking_settings
-        
-        temp_folder = os.path.join(data_settings["output_folder"], "tmp")
+            data_taking_settings = self.data_taking_settings
 
-        print("Thrsesholds: ", data_settings["channel_threshold_dict"])
+        temp_folder = os.path.join(data_taking_settings["output_folder"], "tmp")
+
+        print("Thrsesholds: ", data_taking_settings["channel_threshold_dict"])
 
         # first: make a tmp folder to store the temp config files
         if not os.path.exists(temp_folder):
             os.makedirs(temp_folder)
             
         tmp_config_files = []
-        for channel in data_settings["channel_threshold_dict"].keys():
-            new_config_path = os.path.join(temp_folder, f"config_{channel}_{data_settings['channel_threshold_dict'][channel]}.ini")
+        for channel in data_taking_settings["channel_threshold_dict"].keys():
+            new_config_path = os.path.join(temp_folder, f"config_{channel}_{data_taking_settings['channel_threshold_dict'][channel]}.ini")
 
             # skip if the config file already exists
             if os.path.exists(new_config_path):
@@ -124,7 +141,7 @@ class SingleCalibration:
 
             # Add the new configuration to the BOARD-0 section
             new_config.set(section_name, 'DC_OFFSET', '+40')
-            new_config.set(section_name, 'TRIGGER_THRESHOLD', f'{data_settings["channel_threshold_dict"][channel]}')
+            new_config.set(section_name, 'TRIGGER_THRESHOLD', f'{data_taking_settings["channel_threshold_dict"][channel]}')
             new_config.set(section_name, 'CHANNEL_TRIGGER', 'ACQUISITION_ONLY')
             new_config.set(section_name, 'PULSE_POLARITY', '1')
             # new_config.set(section_name, 'N_EVENTS', f'{data_settings["number_of_events"]}')
@@ -143,29 +160,55 @@ class SingleCalibration:
         # get threshold
         print("Determining thresholds from calibration run...")
         self.data_taking_settings["channel_threshold_dict"] = self.get_adc_threshold_from_calibration()
-
         self.tmp_config_files = self.generate_temp_configs(calibration=False)
         
    # for multi-threading and timeout
-    def run_executable(self, e, tmp_config_file, base_path, data_file_name):
-        os.system(f"{self.run_sandyaq_command} -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
-        if e.isSet():
-            print("Timeout")
-            os.system(f"pkill -f {self.run_sandyaq_command}")
+    def run_executable(self, e, tmp_config_file, number_of_events, base_path, data_file_name):
+        # os.system(f"{self.run_sandyaq_command} -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
+        # if e.isSet():
+        #     print("Timeout")
+        #     os.system(f"pkill -f {self.run_sandyaq_command}")
+
+        print("Running sandyaq")
+        process = subprocess.Popen(
+            [self.run_sandyaq_command, '-c', tmp_config_file, '-n', str(number_of_events), '-d', base_path, '-f', data_file_name],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+
+        # Check for timeout
+        while process.poll() is None:
+            if e.is_set():
+                process.terminate()  # Gracefully terminate the process
+                print("Timeout")
+                break
+            time.sleep(1)  # Check every second
+
+        # Wait for the process to terminate if it hasn’t been terminated already
+        process.wait()
+
+        if process.returncode != 0:
+            print(f"Process terminated with errors: {process.stderr.read().decode()}")
+
     
     def run(self, dry_run = False, calibration = False):
+
+        if dry_run: # This is not doing anything?? -> Yue
+                print(f"Running sandyaq -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
+                raise ValueError("Dry run not implemented yet. Please set dry_run to False. Exiting...")
         
-        # get the current timestamp, and add it to the file name
+        if calibration:
+            data_taking_settings = self.calib_data_taking_settings
+        else:
+            data_taking_settings = self.data_taking_settings
+        
+        # get the current timestamp (global to all channel for the same run), and add it to the file name
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        if calibration:
-            base_path = os.path.join(self.data_taking_settings["output_folder"], "threshold_calibration")
-            # meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
-        else:
-            base_path = self.data_taking_settings["output_folder"]
-            # meta_file_name = os.path.join(self.data_taking_settings["output_folder"], f"meta_{data_file_name}.json")
+        base_path = data_taking_settings["output_folder"]
+        number_of_events = data_taking_settings["number_of_events"]
+        # meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
         
-
         runtime_csv_file = os.path.join(base_path, f"runtime_all_channel_{timestamp}.csv")
         with open(runtime_csv_file, "w") as f:
                 f.write("channel,elapsed_time\n")
@@ -173,7 +216,6 @@ class SingleCalibration:
         # run sandyaq to take data
         # the executable is in: /home/daqtest/DAQ/SandyAQ/sandyaq/build
         # run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ/sandyaq/build/sandyaq"
-
         for tmp_config_file in tqdm(self.tmp_config_files):
             # -c: config file
             # -n: number of events
@@ -195,52 +237,48 @@ class SingleCalibration:
             e = threading.Event()
             exit_current_loop = False
 
-            if not dry_run:
-                print(f"Taking data with config file: {tmp_config_file}")
+            print(f"Taking data with config file: {tmp_config_file}")
 
-                t = threading.Thread(target=self.run_executable, args=(e, tmp_config_file, base_path, data_file_name))
-                
-                t.start()
-                t.join(timeout=7200)
-                if t.is_alive():
-                    print(f"Timeout: killing the thread")
-                    e.set()
+            # start a thread to run the executable
+            t = threading.Thread(target=self.run_executable, args=(e, tmp_config_file, number_of_events, base_path, data_file_name))
+            
+            t.start()
+            t.join(timeout=data_taking_settings["timeout"])
 
-                    # remove the corrupted data file
-                    files_to_be_removed = glob.glob(os.path.join(base_path, f"{data_file_name}*.bin"))
-                    for _file in files_to_be_removed:
-                        print(f"Removing file: {_file}")
-                        os.remove(_file)
-
-                    exit_current_loop = True
-                    
-                else:
-                    print(f"Thread finished")
-                
-                # Thread can still be alive at this point. Do another join without a timeout 
-                # to verify thread shutdown.
-                # https://stackoverflow.com/questions/34562473/most-pythonic-way-to-kill-a-thread-after-some-period-of-time
+            if t.is_alive():
+                e.set()
                 t.join()
+                print("Timeout occurred and process terminated")
 
-                if exit_current_loop:
-                    continue
+                # remove the corrupted data file
+                files_to_be_removed = glob.glob(os.path.join(base_path, f"{data_file_name}*.bin"))
+                for _file in files_to_be_removed:
+                    print(f"Removing file: {_file}")
+                    os.remove(_file)
 
-
+                exit_current_loop = True
+                
             else:
-                print(f"Running sandyaq -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
+                print("Thread finished successfully")
+            
+            # Thread can still be alive at this point. Do another join without a timeout 
+            # to verify thread shutdown.
+            # https://stackoverflow.com/questions/34562473/most-pythonic-way-to-kill-a-thread-after-some-period-of-time
+            t.join()
 
-                # This is not doing anything?? -> Yue
-                raise ValueError("Dry run not implemented yet. Please set dry_run to False. Exiting...")
+            if exit_current_loop:
+                continue
+
         
             end_timestamp = datetime.datetime.now()
 
             meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
 
-            self.data_taking_settings["runtime"] = str(end_timestamp - start_timestamp)
-            self.data_taking_settings["start_timestamp"] = str(start_timestamp)
+            data_taking_settings["runtime"] = str(end_timestamp - start_timestamp)
+            data_taking_settings["start_timestamp"] = str(start_timestamp)
 
             with open(meta_file_name, "w") as f:
-                json.dump(self.data_taking_settings, f, indent=4)
+                json.dump(data_taking_settings, f, indent=4)
 
             with open(runtime_csv_file, "a") as f:
                 f.write(f"{channel},{(end_timestamp - start_timestamp).total_seconds()}\n")
@@ -249,7 +287,7 @@ class SingleCalibration:
 
     def get_adc_threshold_from_calibration(self):
         # read the data from the calibration run
-        data_folder = os.path.join(self.data_taking_settings["output_folder"],"threshold_calibration")
+        data_folder = os.path.join(self.calib_data_taking_settings["output_folder"])
         meta_data_list = glob.glob(f"{data_folder}/*meta*")
 
         # Sort the file paths based on the extracted date and time in ascending order (oldest to newest)
