@@ -23,7 +23,7 @@ import time
 import subprocess
 
 import WaveformProcessor
-import util
+import util.utils as util
 sys.path.insert(0,"/home/daqtest/Processor/sandpro")
 import sandpro
 
@@ -48,7 +48,7 @@ class SingleCalibration:
                               number_of_events, output_folder, voltage_config, temperature, threshold_multiplier")
         self.user_input_data_taking_setting = data_taking_settings
         self.threshold_multiplier = self.user_input_data_taking_setting["threshold_multiplier"] * np.ones(24)
-        self.timeout = 3600 # in second; kill run after this time
+        self.timeout = 1800 # in second; kill run after this time
 
         # calibration settings
         self.n_calibration_events = 3000
@@ -329,14 +329,14 @@ class SingleCalibration:
                 }
             
             # dump the config to a json file
-            with open("process_config.json", "w") as f:
+            with open("tmp_process_config.json", "w") as f:
                 json.dump(process_config, f)
             if len(config.get("BOARD-0", "CHANNEL_LIST")) > 0:
                 board_number = 0
             else:
                 board_number = 1
 
-            processor= sandpro.processing.rawdata.RawData(config_file = "process_config.json",
+            processor= sandpro.processing.rawdata.RawData(config_file = "tmp_process_config.json",
                                                 perchannel=False)
             data_file_basename = meta_data_basename.replace("meta_", "").replace(".json", f"_board_{board_number}.bin")
             try:

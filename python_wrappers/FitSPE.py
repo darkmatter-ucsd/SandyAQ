@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-class fit_SPE:  
+class FitSPE:  
     def __init__(self, bias_voltage, n_hist, bin_edges, plot = True, 
                  show_plot=False, save_plot=True, output_name = ''):
 
@@ -40,10 +40,13 @@ class fit_SPE:
         
         
         self.guess_peaks(distance_rough_guess = self.distance_rough_guess[abs(self.bias_voltage)])
-        if self.n_peaks > 1:
+        if self.n_peaks >= 3:
             self.fit_peaks()
+            mean_peak_width = self.get_mean_peak_width()
+            
             if self.n_good_fit >= 3:
-                self.get_gain()
+                self.get_gain(tolerance = mean_peak_width/2)
+                
             
     def guess_peaks(self, distance_rough_guess = 0.5):
 
@@ -141,6 +144,8 @@ class fit_SPE:
         self.line_y = np.array(self.line_y, dtype=object)
         
         self.n_good_fit = len(self.mu_err_list[self.mu_err_list < self.good_fit_threshold])
+        # good peaks are true
+        self.good_peaks = self.mu_err_list < self.good_fit_threshold
         
         # if self.n_peaks > 1:
         #     self.get_gain()
@@ -149,14 +154,48 @@ class fit_SPE:
 
         return
     
-    def get_gain(self):
+    def get_mean_peak_width(self):
+        '''Return the resolution from all well-fitted peaks
+        param: None
+        return: resolution (float)
+                error (float)
+        '''
+        # calculated resolution for only the good enough fit 
+        
+        sig_list = self.sig_list[self.good_peaks]
+        
+        mean = np.mean(sig_list) # mean of gain
+        sem = np.std(sig_list, ddof=1) / np.sqrt(np.size(sig_list)) # Standard error of the mean
+        
+        # FIXME: write this into a function and double check the numbers
+        # input_impedance = 50 #ohm
+        # self.resolution = mean*1e-12/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
+        # self.resolution_error = sem*1e-12/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
+
+        return mean
+    
+    def get_gain(self, tolerance = 0.03):
         '''Return the gain calculated from the SPE fit
         param: None
         return: gain (float)
                 confidence (float)
         '''
+        
+        # prevent the case where all good peaks were
+        # exactly separated by a bad peak
+        if self.n_good_fit < float(len(self.mu_list))/2: 
+            consecutive_good_peaks = 0
+            for i in self.good_peaks:
+                if i == True:
+                    consecutive_good_peaks += 1
+                else:
+                    consecutive_good_peaks = 0
+            if i < 4:
+                return
+                    
+        
         # calculated difference of all peaks with good enough fit 
-        gain_list = np.diff(self.mu_list[self.mu_err_list < self.good_fit_threshold ])
+        gain_list = np.diff(self.mu_list[self.good_peaks])
         
         # if the fit error of first peak is also good, 
         # it might be the SPE peak, include it to the SPE list
@@ -177,7 +216,7 @@ class fit_SPE:
         
         # Cut requirement: 
         # at least 4 fitted peaks
-        while (len(gain_list) > 3) & (sem > self.good_fit_threshold) & (count < maximum_niteration):
+        while (len(gain_list) > 3) & (sem > tolerance) & (count < maximum_niteration):
             # print("Entring optimization loop")
             # remove the largest SPE guess
             gain_list = gain_list[:-1] # rmb gain_list is sorted
@@ -199,20 +238,17 @@ class fit_SPE:
             
             count += 1
             
-        if sem < self.good_fit_threshold:
+        input_impedance = 50 #ohm
+        if sem < tolerance:
             self.spe_position = mean
             self.spe_position_error = sem
         
-        input_impedance = 50 #ohm
-        self.gain = self.spe_position*1e-12/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
-        self.gain_error = self.spe_position_error*1e-12/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
+            self.gain = self.spe_position*1e-12/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
+            self.gain_error = self.spe_position_error*1e-12/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
         
         # print(f"Mean, error: {self.spe_position},{self.spe_position_error}")
         # print(f"Gain: {self.gain}")
         return 
-        
-        
-        
         
     # Let's create a function to model and create data 
     def gaussian_func(self, x, a, x0, sigma): 

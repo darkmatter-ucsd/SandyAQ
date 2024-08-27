@@ -73,10 +73,9 @@ def main(output_name = "./gain_analysis.csv"):
                      quotechar='"', 
                      skipinitialspace=True, 
                      encoding="utf-8")
+    info = d2d.data(df)
     
     # data selection cuts
-    info = d2d.data(df)
-
     mask_record_length_nan = ~np.isnan(info.record_length_sample)
     mask_run_tag = util.vec_regex_search('GXe/gain_calibration', info.run_tag)
     mask_run_tag_remove_trash = ~util.vec_regex_search('trash', info.run_tag)
@@ -87,12 +86,10 @@ def main(output_name = "./gain_analysis.csv"):
     mask = mask_run_tag & mask_run_tag_remove_trash & mask_time & mask_record_length_nan & mask_start_index_nan & mask_nevents_nan
     info.apply_mask(mask, inplace=True)
     
-    # FIXME: read from process_config.json
-    nchs = 1
-    record_length_sample = 1000
-    sample_selection = 120
-    samples_to_average = 40
-
+    nchs = info.number_of_channels
+    record_length_sample = info.record_length_sample
+    sample_selection = info.baseline_n_samples
+    samples_to_average = info.baseline_n_samples_avg
     integral_window = (0.3,0.6)
 
     gain_list = []
@@ -110,10 +107,11 @@ def main(output_name = "./gain_analysis.csv"):
                     "samples_to_average": int(samples_to_average)}
 
     # dump the config to a json file
-    with open("process_config.json", "w") as f:
+    sandpro_process_config_fname = "sandpro_process_config.json"
+    with open(sandpro_process_config_fname, "w") as f:
         json.dump(process_config, f, indent=4)  
         
-    processor= sandpro.processing.rawdata.RawData(config_file = "process_config.json",
+    processor= sandpro.processing.rawdata.RawData(config_file = sandpro_process_config_fname,
                                                 perchannel=False)
 
     for i in range(len(info)):

@@ -12,7 +12,7 @@ import scipy.stats
 import datetime
 import pandas as pd
 
-import util
+import util.utils as util
 import WaveformProcessor
 import FitSPE
 from matplotlib.lines import Line2D
@@ -107,6 +107,8 @@ class PostProcessing:
     def process_run(self):
         if(len(self.list_of_files))==1:
             self.process_run_single_run(meta_data = self.list_of_files[0])
+            # otherwise it will loop over the single file path
+            # e.g. "/", "h", "o", "m", "e", ...
         else:
             self._v_process_run(self, self.list_of_files)
         return
@@ -151,7 +153,8 @@ class PostProcessing:
         "samples_to_average": 40}
 
         # dump the config to a json file
-        with open("process_config.json", "w") as f:
+        sandpro_process_config_fname = "sandpro_process_config.json"
+        with open(sandpro_process_config_fname, "w") as f:
             json.dump(spd.process_config, f)
             # set the board number and integral window according to the board number (board 0 and 1 have different integral windows)
         if len(config.get("BOARD-0", "CHANNEL_LIST")) > 0:
@@ -163,7 +166,7 @@ class PostProcessing:
             spd.integral_window = (0.3,0.55) #legacy, FIXME: remove
             # local_channel = channel - 16
 
-        processor= sandpro.processing.rawdata.RawData(config_file = "process_config.json",
+        processor= sandpro.processing.rawdata.RawData(config_file = sandpro_process_config_fname,
                                                 perchannel=False)
         data_file_basename = meta_data_basename.replace("meta_", "").replace(".json", f"_board_{board_number}.bin")
 
@@ -304,20 +307,20 @@ class PostProcessing:
         axes[2,0].set_ylim(1e-1,None)
 
         if not self.calibration_run:
-            try:
-                spe_fit = FitSPE.FitSPE(spd.bias_voltage, hist_count, bin_edges, plot = False, show_plot=False, save_plot=False)
-                if len(spe_fit.mu_list) > 0:
-                    axes[2,0].plot(np.transpose(spe_fit.line_x)[:,spe_fit.mu_err_list<0.03],np.transpose(spe_fit.line_y)[:,spe_fit.mu_err_list<0.03],color='black')
-                    axes[2,0].plot(np.transpose(spe_fit.line_x)[:,spe_fit.mu_err_list>=0.03],np.transpose(spe_fit.line_y)[:,spe_fit.mu_err_list>=0.03],color='blue')
-                    
-                    if not (np.isnan(spe_fit.spe_position) or np.isnan(spe_fit.spe_position_error)):
-                        
-                        axes[2,0].axvline(spe_fit.spe_position, color="tab:green", label=f"Gain: {spe_fit.gain}")
-                        axes[2,0].axvspan(spe_fit.spe_position - spe_fit.spe_position_error, spe_fit.spe_position + spe_fit.spe_position_error,
-                                      alpha = 0.5, color="tab:green")
+            # try:
+            spe_fit = FitSPE.FitSPE(spd.bias_voltage, hist_count, bin_edges, plot = False, show_plot=False, save_plot=False)
+            if len(spe_fit.mu_list) > 0:
+                axes[2,0].plot(np.transpose(spe_fit.line_x)[:,spe_fit.mu_err_list<0.03],np.transpose(spe_fit.line_y)[:,spe_fit.mu_err_list<0.03],color='black')
+                axes[2,0].plot(np.transpose(spe_fit.line_x)[:,spe_fit.mu_err_list>=0.03],np.transpose(spe_fit.line_y)[:,spe_fit.mu_err_list>=0.03],color='blue')
                 
-            except:
-                print("Could not fit SPE")
+                if not (np.isnan(spe_fit.spe_position) or np.isnan(spe_fit.spe_position_error)):
+                    
+                    axes[2,0].axvline(spe_fit.spe_position, color="tab:green", label=f"Gain: {spe_fit.gain}")
+                    axes[2,0].axvspan(spe_fit.spe_position - spe_fit.spe_position_error, spe_fit.spe_position + spe_fit.spe_position_error,
+                                    alpha = 0.5, color="tab:green")
+                
+            # except:
+            #     print("Could not fit SPE")
 
             handles, labels = axes[2,0].get_legend_handles_labels()
             custom_lines = [Line2D([0], [0], color='black'),

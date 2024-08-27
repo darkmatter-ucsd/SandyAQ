@@ -9,7 +9,7 @@ __pycache__/
 python_wrappers/test_output/
 python_wrappers/notebooks/test_output/
 python_wrappers/run_list/
-python_wrappers/archived_run_list/
+python_wrappers/archived_run_list*
 *.png
 softlink_to_data
 *process_config.json

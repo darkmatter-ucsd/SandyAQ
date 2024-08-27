@@ -202,10 +202,11 @@ def single_data_file_to_dict(file_path: str) -> dict:
                 "samples_to_average": info.baseline_n_samples_avg}
 
                 # dump the config to a json file
-                with open("process_config.json", "w") as f:
+                sandpro_process_config_fname = "sandpro_process_config.json"
+                with open("sandpro_process_config_fname.json", "w") as f:
                     json.dump(process_config, f, indent=4)
 
-                processor= sandpro.processing.rawdata.RawData(config_file = "process_config.json",
+                processor= sandpro.processing.rawdata.RawData(config_file = sandpro_process_config_fname,
                                                         perchannel=False) # what does this perchannel mean?
 
                 try:
