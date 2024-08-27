@@ -188,32 +188,50 @@ def single_data_file_to_dict(file_path: str) -> dict:
 
             if os.path.exists(config_file) and (info.number_of_events > (truncate_event_front + truncate_event_back)):
                     
-                    start_index, end_index = truncate_event_front, info.number_of_events - truncate_event_back -1 #first 1000 events are noisy # the last 500 events might be empty
+                start_index, end_index = truncate_event_front, info.number_of_events - truncate_event_back -1 #first 1000 events are noisy # the last 500 events might be empty
 
-                    config = configparser.ConfigParser()
-                    config.optionxform = str
-                    config.read(config_file)
+                config = configparser.ConfigParser()
+                config.optionxform = str
+                config.read(config_file)
 
-                    info.record_length_sample = int(config.get("COMMON", "RECORD_LENGTH"))
+                info.record_length_sample = int(config.get("COMMON", "RECORD_LENGTH"))
 
-                    process_config = {"nchs": info.number_of_channels,
-                    "nsamps": info.record_length_sample,
-                    "sample_selection": info.baseline_n_samples, 
-                    "samples_to_average": info.baseline_n_samples_avg}
+                process_config = {"nchs": info.number_of_channels,
+                "nsamps": info.record_length_sample,
+                "sample_selection": info.baseline_n_samples, 
+                "samples_to_average": info.baseline_n_samples_avg}
 
-                    # dump the config to a json file
-                    with open("process_config.json", "w") as f:
-                        json.dump(process_config, f, indent=4)
+                # dump the config to a json file
+                with open("process_config.json", "w") as f:
+                    json.dump(process_config, f, indent=4)
 
-                    processor= sandpro.processing.rawdata.RawData(config_file = "process_config.json",
-                                                            perchannel=False) # what does this perchannel mean?
+                processor= sandpro.processing.rawdata.RawData(config_file = "process_config.json",
+                                                        perchannel=False) # what does this perchannel mean?
 
+                try:
+                    waveform = processor.get_rawdata_numpy(n_evts=info.number_of_events-1,
+                                                file=info.file_path, # specific .bin file
+                                                bit_of_daq=14,
+                                                headersize=4,inversion=False)
+                    
+                    wfp = WaveformProcessor.WFProcessor(file_dir, volt_per_adc=2/2**14)
+                    wfp.set_data(waveform["data_per_channel"][start_index:end_index,0], in_adc = False)
+                    wfp.process_wfs()
+                    
+                    info.baseline_std = np.mean(wfp.baseline_rms)
+                    info.baseline_mean = np.mean(wfp.baseline)
+                    info.n_processed_events = int(len(wfp.baseline_rms))
+                    info.start_index = int(start_index)
+
+                except Exception as e:
+                    print(e)
                     try:
-                        waveform = processor.get_rawdata_numpy(n_evts=info.number_of_events-1,
+                        waveform = processor.get_rawdata_numpy(1999,
                                                     file=info.file_path, # specific .bin file
                                                     bit_of_daq=14,
                                                     headersize=4,inversion=False)
-                        
+                        start_index, end_index = 1000, 1900 #first 1000 events are noisy
+
                         wfp = WaveformProcessor.WFProcessor(file_dir, volt_per_adc=2/2**14)
                         wfp.set_data(waveform["data_per_channel"][start_index:end_index,0], in_adc = False)
                         wfp.process_wfs()
@@ -221,28 +239,10 @@ def single_data_file_to_dict(file_path: str) -> dict:
                         info.baseline_std = np.mean(wfp.baseline_rms)
                         info.baseline_mean = np.mean(wfp.baseline)
                         info.n_processed_events = int(len(wfp.baseline_rms))
-                        info.start_index = int(start_index)
-
+                        
                     except Exception as e:
                         print(e)
-                        try:
-                            waveform = processor.get_rawdata_numpy(1999,
-                                                        file=info.file_path, # specific .bin file
-                                                        bit_of_daq=14,
-                                                        headersize=4,inversion=False)
-                            start_index, end_index = 1000, 1900 #first 1000 events are noisy
-
-                            wfp = WaveformProcessor.WFProcessor(file_dir, volt_per_adc=2/2**14)
-                            wfp.set_data(waveform["data_per_channel"][start_index:end_index,0], in_adc = False)
-                            wfp.process_wfs()
-                            
-                            info.baseline_std = np.mean(wfp.baseline_rms)
-                            info.baseline_mean = np.mean(wfp.baseline)
-                            info.n_processed_events = int(len(wfp.baseline_rms))
-                            
-                        except Exception as e:
-                            print(e)
-                            print("Error in reading the waveform for file: ", info.file_path)
+                        print("Error in reading the waveform for file: ", info.file_path)
             
             return info.__dict__
         return None
@@ -264,9 +264,6 @@ def data_files_to_csv(data_files: List[str], existing_df: pd.DataFrame = None, r
     data = None
     info = RunInfo()
     n_columns = len(info.__dict__)
-
-    # Saving the data in chunks to avoid memory issues
-    # chunk_size = 100
 
     # Check if the existing DataFrame has the same number of columns as the new data
     length_existing_df = 0 if existing_df is None else len(existing_df.columns)
@@ -308,6 +305,9 @@ def data_files_to_csv(data_files: List[str], existing_df: pd.DataFrame = None, r
             new_df.to_csv(RUN_INFO_FILE, mode='a', index=False, 
                           header=False, quoting=csv.QUOTE_NONNUMERIC)
 
+    # Saving the data in chunks to avoid memory issues
+    # chunk_size = 100
+    
     # Main loop to process the data in chunks
     # for i in range(0, len(data_files), chunk_size):
     #     # Process the chunk of data (e.g., perform calculations, transformations, etc.)

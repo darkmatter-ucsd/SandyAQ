@@ -7,16 +7,32 @@ from datetime import datetime
 import numpy as np
 import os
 import pandas as pd
+import re
 
-
-def load_run_info(path = "../run_info.csv"):
+def _re_search(pattern: str, string):
     """
-    Load the run info from the run_info.csv file into pandas dataframe
+    This function check if the pattern matches with the string
+    The vectorized function is defined afterwards
+    
+    Return: boolean
     """
-    df = pd.read_csv(path)
+    if pd.isnull(string):
+        return False #does not match
+    else:
+        return bool(re.search(pattern, string))
+
+vec_regex_search = np.vectorize(_re_search, excluded=["pattern"])
 
 
-    return df
+# def load_run_info(path = "../run_info.csv"):
+#     """
+#     Load the run info from {path in csv} into pandas dataframe
+    
+#     Return dataframe
+#     """
+#     df = pd.read_csv(path)
+
+#     return df
 
 def extract_date_meta_data(meta_data_path):
 
