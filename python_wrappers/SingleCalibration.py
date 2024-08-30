@@ -23,7 +23,7 @@ import time
 import subprocess
 
 import WaveformProcessor
-import util.utils as util
+import common.utils as util
 sys.path.insert(0,"/home/daqtest/Processor/sandpro")
 import sandpro
 
@@ -43,7 +43,8 @@ class SingleCalibration:
                                                            "output_folder", 
                                                            "voltage_config", 
                                                            "temperature",
-                                                           "threshold_multiplier"]):
+                                                           "threshold_multiplier",
+                                                           "channel_list"]):
             raise ValueError("data_taking_settings should have all of the required keys: \
                               number_of_events, output_folder, voltage_config, temperature, threshold_multiplier")
         self.user_input_data_taking_setting = data_taking_settings
@@ -67,17 +68,24 @@ class SingleCalibration:
         self.config_template.read(config_template_path)
 
         # generate the data taking settings for both calibration and data taking
-        self.generate_data_taking_settings()
+        self._gen_data_taking_settings()
 
-        if calibration:
-            print("Running calibration...")
+        if calibration == True:
             self.run_calibration()
+        elif (type(calibration)==str):
+            if (os.path.isdir(calibration)):
+                self.update_adc_threshold_from_path(calibration)
+            elif (os.path.isfile(calibration)):
+                raise NotADirectoryError("Please specify a path to directory instead")
+            else:
+                raise FileNotFoundError(f"{calibration} not found")
+        elif calibration == False:
+            # directly generate the temporary config files from user input
+            self.tmp_config_files = self._gen_tmp_configs()
         else:
-            # generate the temporary config files
-            self.tmp_config_files = self.generate_temp_configs()
-
-
-    def generate_data_taking_settings(self):
+            raise TypeError
+            
+    def _gen_data_taking_settings(self):
 
         self.data_taking_settings = self.user_input_data_taking_setting.copy()
         self.data_taking_settings["timeout"] = self.timeout
@@ -85,7 +93,7 @@ class SingleCalibration:
         self.calib_data_taking_settings = self.user_input_data_taking_setting.copy()
         # set a very low threshold for all channels, to take noise data
         # data_settings["channel_threshold_dict"] = {0:2305,1:2269,2:2200,3:2209,4:2378,5:2274,6:2386,7:2516,8:2627,9:2316,10:2162,11:2066,12:2456,13:2446,14:2413,15:2192,16:2230,17:2468,18:2158,19:2090,20:2342,21:2258,22:2313,23:2266}
-        self.calib_data_taking_settings["channel_threshold_dict"] = {0:2297,1:2269,2:2400,3:2360,4:2378,5:2274,6:2386,7:2516,8:2585,9:2305,10:2300,11:2066,12:2414,13:2446,14:2277,15:2192,16:2230,17:2468,18:2158,19:2090,20:2280,21:2258,22:2313,23:2233}
+        self.calib_data_taking_settings["channel_threshold_dict"] = {0:2297,1:2369,2:2400,3:2360,4:2390,5:2274,6:2386,7:2516,8:2585,9:2305,10:2300,11:2066,12:2414,13:2446,14:2277,15:2192,16:2230,17:2468,18:2158,19:2090,20:2280,21:2258,22:2313,23:2233}
         self.calib_data_taking_settings["number_of_events"] = self.n_calibration_events
         self.calib_data_taking_settings["output_folder"] = self.user_input_data_taking_setting["output_folder"] + "/threshold_calibration"
         self.calib_data_taking_settings["run_tag"] = "threshold_calibration"
@@ -94,7 +102,7 @@ class SingleCalibration:
         
         return 
 
-    def generate_temp_configs(self, calibration = False):
+    def _gen_tmp_configs(self, calibration = False):
         # the template config is an ini file. We need to do the following modifications:
         # 1. add the channel list
         # 2. add the thresholds
@@ -108,14 +116,12 @@ class SingleCalibration:
 
         temp_folder = os.path.join(data_taking_settings["output_folder"], "tmp")
 
-        print("Thrsesholds: ", data_taking_settings["channel_threshold_dict"])
-
         # first: make a tmp folder to store the temp config files
         if not os.path.exists(temp_folder):
             os.makedirs(temp_folder)
             
         tmp_config_files = []
-        for channel in data_taking_settings["channel_threshold_dict"].keys():
+        for channel in data_taking_settings["channel_list"]:
             new_config_path = os.path.join(temp_folder, f"config_{channel}_{data_taking_settings['channel_threshold_dict'][channel]}.ini")
 
             # skip if the config file already exists
@@ -150,166 +156,66 @@ class SingleCalibration:
             with open(new_config_path, "w") as f:
                 new_config.write(f)
             tmp_config_files.append(new_config_path)
+            
         return tmp_config_files
     
-    def run_calibration(self, dry_run = False):
-        # settings for the calibration run
-        self.tmp_config_files = self.generate_temp_configs(calibration=True)
-        self.run(dry_run=False, calibration=True)
-
-        # get threshold
-        print("Determining thresholds from calibration run...")
-        self.data_taking_settings["channel_threshold_dict"] = self.get_adc_threshold_from_calibration()
-        self.tmp_config_files = self.generate_temp_configs(calibration=False)
+    def _metadata_checklist(self, data_taking_settings):
+        # check if the dictionary have all the essential entries before writing
+        # prevent changes in the code messing up with the recording of meta_data_file
+        try:
+            assert(data_taking_settings["runtime"] != None)
+            assert(data_taking_settings["record_length"]!= None)
+            assert(data_taking_settings["start_timestamp"]!= None)
+            assert(data_taking_settings["timeout"]!= None)
+            assert(data_taking_settings["comment"]!= None)
+            assert(data_taking_settings["number_of_events"]!= None)
+            assert(data_taking_settings["run_tag"]!= None)
+        except Exception as e:
+            print(f"Required metadata entry {e} is missing! Please check the code. ")
+            raise
         
-   # for multi-threading and timeout
-    def run_executable(self, e, tmp_config_file, number_of_events, base_path, data_file_name):
-        # os.system(f"{self.run_sandyaq_command} -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
-        # if e.isSet():
-        #     print("Timeout")
-        #     os.system(f"pkill -f {self.run_sandyaq_command}")
-
-        print("Running sandyaq")
-        process = subprocess.Popen(
-            [self.run_sandyaq_command, '-c', tmp_config_file, '-n', str(number_of_events), '-d', base_path, '-f', data_file_name],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-
-        # Check for timeout
-        while process.poll() is None:
-            if e.is_set():
-                process.terminate()  # Gracefully terminate the process
-                print("Timeout")
-                break
-            time.sleep(1)  # Check every second
-
-        # Wait for the process to terminate if it hasn’t been terminated already
-        process.wait()
-
-        if process.returncode != 0:
-            print(f"Process terminated with errors: {process.stderr.read().decode()}")
-
-    
-    def run(self, dry_run = False, calibration = False):
-
-        if dry_run: # This is not doing anything?? -> Yue
-                print(f"Running sandyaq -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
-                raise ValueError("Dry run not implemented yet. Please set dry_run to False. Exiting...")
+    def get_list_metadata_from_folder(self, data_folder, channels = np.arange(0,24)):
+        '''
+        Inside the given data_folder, generate a list of metadata_file with the latest
+        metadata_file for each channel. channels can be specified, but currently not
+        implemented in the class
+        '''
         
-        if calibration:
-            data_taking_settings = self.calib_data_taking_settings
-        else:
-            data_taking_settings = self.data_taking_settings
-        
-        # get the current timestamp (global to all channel for the same run), and add it to the file name
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        base_path = data_taking_settings["output_folder"]
-        number_of_events = data_taking_settings["number_of_events"]
-        # meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
-        
-        runtime_csv_file = os.path.join(base_path, f"runtime_all_channel_{timestamp}.csv")
-        with open(runtime_csv_file, "w") as f:
-                f.write("channel,elapsed_time\n")
-
-        # run sandyaq to take data
-        # the executable is in: /home/daqtest/DAQ/SandyAQ/sandyaq/build
-        # run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ/sandyaq/build/sandyaq"
-        for tmp_config_file in tqdm(self.tmp_config_files):
-            # -c: config file
-            # -n: number of events
-            # -d: output folder
-            # -f: file name
-
-            parts = tmp_config_file.split('/')[-1].split('_')
-            channel = int(parts[1])
-
-            # extract the file name from the tmp config file
-            data_file_name = os.path.basename(tmp_config_file).replace(".ini", "")
-            # get the current timestamp, and add it to the file name
-            # moved this out of the loop: so that all channel from the same run has the same timestamp
-            # timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            data_file_name = f"{data_file_name}_{timestamp}"
+        metadata_list = []
+        for channel in channels:
+            # search the metadata file for that channel
+            tmp_list = glob.glob(f"{data_folder}/meta_config_{channel}_*")
             
-            start_timestamp = datetime.datetime.now()
-
-            e = threading.Event()
-            exit_current_loop = False
-
-            print(f"Taking data with config file: {tmp_config_file}")
-
-            # start a thread to run the executable
-            t = threading.Thread(target=self.run_executable, args=(e, tmp_config_file, number_of_events, base_path, data_file_name))
+            # check if any file exist
+            if len(tmp_list)==0:
+                raise FileNotFoundError(f"Cannot find any meta_config_ file for channel {channel}")
             
-            t.start()
-            t.join(timeout=data_taking_settings["timeout"])
-
-            if t.is_alive():
-                e.set()
-                t.join()
-                print("Timeout occurred and process terminated")
-
-                # remove the corrupted data file
-                files_to_be_removed = glob.glob(os.path.join(base_path, f"{data_file_name}*.bin"))
-                for _file in files_to_be_removed:
-                    print(f"Removing file: {_file}")
-                    os.remove(_file)
-
-                exit_current_loop = True
-                
-            else:
-                print("Thread finished successfully")
+            # if only one file is found
+            elif len(tmp_list)==1:
+                metadata_list.append(tmp_list[0])
             
-            # Thread can still be alive at this point. Do another join without a timeout 
-            # to verify thread shutdown.
-            # https://stackoverflow.com/questions/34562473/most-pythonic-way-to-kill-a-thread-after-some-period-of-time
-            t.join()
-
-            if exit_current_loop:
-                continue
-
+            # if more than one file is found, use the latest file 
+            elif len(tmp_list) > 1:
+                sorted_tmp_list = sorted(tmp_list, key=util.extract_date_meta_data)
+                metadata_list.append(sorted_tmp_list[-1])
         
-            end_timestamp = datetime.datetime.now()
-
-            meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
-
-            data_taking_settings["runtime"] = str(end_timestamp - start_timestamp)
-            data_taking_settings["start_timestamp"] = str(start_timestamp)
-
-            with open(meta_file_name, "w") as f:
-                json.dump(data_taking_settings, f, indent=4)
-
-            with open(runtime_csv_file, "a") as f:
-                f.write(f"{channel},{(end_timestamp - start_timestamp).total_seconds()}\n")
-                
-        return 
-
-    def get_adc_threshold_from_calibration(self):
-        # read the data from the calibration run
-        data_folder = os.path.join(self.calib_data_taking_settings["output_folder"])
-        meta_data_list = glob.glob(f"{data_folder}/*meta*")
-
-        # Sort the file paths based on the extracted date and time in ascending order (oldest to newest)
-        new_meta_data_list = sorted(meta_data_list, key=util.extract_date_meta_data)
-        meta_data_list=new_meta_data_list[-24:] # 24 = total number of channels
-
-        # Check if all calibration runs are successful
-        # by checking if the timestamps are the same
-        datetime_list = util.v_extract_date_meta_data(meta_data_list)
-        if not np.all(datetime_list == datetime_list[0]):
-            raise ValueError("Not all calibration runs are successful: \n the 24 channels (or last 24 data) don't have the same timestamps. \nCheck the data. Exiting.")
+        # check if the array size is correct
+        try:
+            assert(len(metadata_list)==len(channels))
+        except AssertionError as e:
+            raise( AssertionError( "Number of metadata_list is not the same as channel input. " + \
+                                   "Bug in the code, please check.") )
         
-        # Sort the meta data according to channel number
-        sorted_meta_data_list = sorted(meta_data_list, key=util.extract_channel_meta_data)
+        return metadata_list
+        
+    def get_adc_threshold_from_calibration(self, data_folder, metadata_list):
 
-        # Get the thresholds from the last 24 calibration runs
         baseline_mean_array = []
         baseline_std_array = []
         channels = []
 
-        for i, meta_data in enumerate(sorted_meta_data_list):
-            print(sorted_meta_data_list[i])
+        for i, meta_data in enumerate(metadata_list):
+            print(metadata_list[i])
             # meta_data = sorted_meta_data_list[i]
             meta_data_basename = os.path.basename(meta_data)
             parts = meta_data_basename.split('_')
@@ -326,7 +232,7 @@ class SingleCalibration:
                 "nsamps": int(config.get("COMMON", "RECORD_LENGTH")),
                 "sample_selection": 120,
                 "samples_to_average": 40
-                }
+                }   
             
             # dump the config to a json file
             with open("tmp_process_config.json", "w") as f:
@@ -374,6 +280,164 @@ class SingleCalibration:
         threshold_dict = {i:int(thres) for i, thres in enumerate(threshold_adc.astype(int))}
 
         return threshold_dict
+   
+    # for multi-threading and timeout
+    def _run_executable(self, e, tmp_config_file, number_of_events, base_path, data_file_name):
+        # os.system(f"{self.run_sandyaq_command} -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
+        # if e.isSet():
+        #     print("Timeout")
+        #     os.system(f"pkill -f {self.run_sandyaq_command}")
+
+        print("Running sandyaq")
+        process = subprocess.Popen(
+            [self.run_sandyaq_command, '-c', tmp_config_file, '-n', str(number_of_events), '-d', base_path, '-f', data_file_name],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        
+
+        # Check for timeout
+        while process.poll() is None:
+            if e.is_set():
+                process.terminate()  # Gracefully terminate the process
+                print("Timeout")
+                break
+            time.sleep(1)  # Check every second
+
+        # Wait for the process to terminate if it hasn’t been terminated already
+        process.wait()
+
+        if process.returncode != 0:
+            print(f"Process terminated with errors: {process.stderr.read().decode()}")
+   
+    def update_adc_threshold_from_path(self, calibration_path):
+        print(f"Setting threshold from folder {calibration_path}...")
+        
+        # self.calib_data_taking_settings["output_folder"] = calibration_path
+        metadata_list = self.get_list_metadata_from_folder(calibration_path, 
+                                                           self.user_input_data_taking_setting["channel_list"])
+        
+        self.data_taking_settings["channel_threshold_dict"] = self._get_adc_threshold_from_calibration(calibration_path, 
+                                                                                                       metadata_list)
+        self.tmp_config_files = self._gen_tmp_configs(calibration=False)
+        
+        return
+    
+    def run_calibration(self, dry_run = False):
+        print("Running calibration...")
+        
+        # settings for the calibration run
+        self.tmp_config_files = self._gen_tmp_configs(calibration=True)
+        self.run(dry_run=False, calibration=True)
+
+        # get threshold
+        print("Determining thresholds from calibration run...")
+        calibration_path = self.calib_data_taking_settings["output_folder"]
+        self.update_adc_threshold_from_path(calibration_path)
+        
+        return 
+    
+    def run(self, dry_run = False, calibration = False):
+        if dry_run: # This is not doing anything?? -> Yue
+                print(f"Running sandyaq -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
+                raise ValueError("Dry run not implemented yet. Please set dry_run to False. Exiting...")
+        
+        if calibration:
+            data_taking_settings = self.calib_data_taking_settings
+        else:
+            data_taking_settings = self.data_taking_settings
+        
+        # get the current timestamp (global to all channel for the same run), and add it to the file name
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        base_path = data_taking_settings["output_folder"]
+        number_of_events = data_taking_settings["number_of_events"]
+        # meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
+        
+        runtime_csv_file = os.path.join(base_path, f"runtime_all_channel_{timestamp}.csv")
+        with open(runtime_csv_file, "w") as f:
+                f.write("channel,elapsed_time\n")
+
+        # run sandyaq to take data
+        # the executable is in: /home/daqtest/DAQ/SandyAQ/sandyaq/build
+        # run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ/sandyaq/build/sandyaq"
+        for tmp_config_file in tqdm(self.tmp_config_files):
+            # -c: config file
+            # -n: number of events
+            # -d: output folder
+            # -f: file name
+
+            parts = tmp_config_file.split('/')[-1].split('_')
+            channel = int(parts[1])
+
+            # extract the file name from the tmp config file
+            data_file_name = os.path.basename(tmp_config_file).replace(".ini", "")
+            # get the current timestamp, and add it to the file name
+            # moved this out of the loop: so that all channel from the same run has the same timestamp
+            # timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            data_file_name = f"{data_file_name}_{timestamp}"
+            
+            start_timestamp = datetime.datetime.now()
+
+            e = threading.Event()
+            exit_current_loop = False
+
+            print(f"Taking data with config file: {tmp_config_file}")
+
+            # start a thread to run the executable
+            t = threading.Thread(target=self._run_executable, args=(e, tmp_config_file, number_of_events, base_path, data_file_name))
+            
+            t.start()
+            t.join(timeout=data_taking_settings["timeout"])
+
+            if t.is_alive():
+                e.set()
+                t.join()
+                print("Timeout occurred and process terminated")
+
+                # remove the corrupted data file
+                files_to_be_removed = glob.glob(os.path.join(base_path, f"{data_file_name}*.bin"))
+                for _file in files_to_be_removed:
+                    print(f"Removing file: {_file}")
+                    os.remove(_file)
+
+                exit_current_loop = True
+                
+            else:
+                print("Thread finished successfully")
+            
+            # Thread can still be alive at this point. Do another join without a timeout 
+            # to verify thread shutdown.
+            # https://stackoverflow.com/questions/34562473/most-pythonic-way-to-kill-a-thread-after-some-period-of-time
+            t.join()
+
+            if exit_current_loop:
+                continue
+
+        
+            end_timestamp = datetime.datetime.now()
+
+            meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
+
+            # note that the dictionary is assigned by reference, so this will update
+            # either self.calib_data_taking_setting or self.data_taking_settings, which
+            # is desired, i.e. this is on purpose.
+            data_taking_settings["runtime"] = str(end_timestamp - start_timestamp)
+            data_taking_settings["start_timestamp"] = str(start_timestamp)
+            # retrieve record length from data takking configuration
+            tmp_config = configparser.ConfigParser()
+            tmp_config.optionxform = str
+            tmp_config.read(tmp_config_file)
+            data_taking_settings["record_length"] = tmp_config.get("COMMON", "RECORD_LENGTH")
+            
+            self._metadata_checklist(data_taking_settings)
+            with open(meta_file_name, "w") as f:
+                json.dump(data_taking_settings, f, indent=4)
+
+            with open(runtime_csv_file, "a") as f:
+                f.write(f"{channel},{(end_timestamp - start_timestamp).total_seconds()}\n")
+                
+        return 
     
 if __name__ == "__main__":
     test_config = {}
