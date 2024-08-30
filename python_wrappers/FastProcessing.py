@@ -12,7 +12,9 @@ import scipy.stats
 import datetime
 import pandas as pd
 
-import util.utils as util
+import common.utils as util
+import common.read_share_config as rsc
+
 import WaveformProcessor
 import FitSPE
 from matplotlib.lines import Line2D
@@ -27,12 +29,6 @@ import sandpro
 
 class scalar_processed_data:
     def __init__(self):
-
-        # print("Reading: ", config_name)
-        # config_path = os.path.join(self.data_folder, "tmp",config_name)
-        # config = configparser.ConfigParser()
-        # config.optionxform = str
-        # config.read(config_path)
 
         self.timestamp_str = ""
         self.datetime_obj = datetime.datetime(1970,1,1,1,1,1)
@@ -101,8 +97,11 @@ class PostProcessing:
                                           "areas", "heights","hist_count","bin_edges",
                                           "randomly_selected_raw_WF","randomly_selected_filtered_WF"]) 
                 
-        #plot settings
+        # plot settings
         self.fontsize = "small"  
+        
+        # other settings that are shared by other programmes
+        self.share_config = rsc.configurations()
         
     def process_run(self):
         if(len(self.list_of_files))==1:
@@ -142,40 +141,43 @@ class PostProcessing:
         # bias_voltage_list.append(bias_voltage)
 
         print("Reading: ", config_name)
-        config_path = os.path.join(self.data_folder, "tmp",config_name)
-        config = configparser.ConfigParser()
-        config.optionxform = str
-        config.read(config_path)
+        datataking_config_path = os.path.join(self.data_folder, "tmp",config_name)
+        datataking_config = configparser.ConfigParser()
+        datataking_config.optionxform = str
+        datataking_config.read(datataking_config_path)
 
-        spd.process_config = {"nchs": 1,
-        "nsamps": int(config.get("COMMON", "RECORD_LENGTH")),
-        "sample_selection": 120,
-        "samples_to_average": 40}
+        spd.process_config = {"nchs": self.share_config.n_channels,
+        "nsamps": int(datataking_config.get("COMMON", "RECORD_LENGTH")),
+        "sample_selection": self.share_config.n_baseline_samples,
+        "samples_to_average": self.share_config.n_baseline_samples_avg}
 
         # dump the config to a json file
         sandpro_process_config_fname = "sandpro_process_config.json"
         with open(sandpro_process_config_fname, "w") as f:
             json.dump(spd.process_config, f)
             # set the board number and integral window according to the board number (board 0 and 1 have different integral windows)
-        if len(config.get("BOARD-0", "CHANNEL_LIST")) > 0:
+        if len(datataking_config.get("BOARD-0", "CHANNEL_LIST")) > 0:
             board_number = 0
             # local_channel = channel
-            spd.integral_window = (0.3,0.55)
         else:
             board_number = 1
-            spd.integral_window = (0.3,0.55) #legacy, FIXME: remove
             # local_channel = channel - 16
+            
+        spd.integral_window = self.share_config.integral_window
 
         processor= sandpro.processing.rawdata.RawData(config_file = sandpro_process_config_fname,
                                                 perchannel=False)
         data_file_basename = meta_data_basename.replace("meta_", "").replace(".json", f"_board_{board_number}.bin")
+        
+        truncate_event_front = self.share_config.truncate_event_front #index to truncate the events before
+        truncate_event_back = self.share_config.truncate_event_back  #index to truncate the events after
 
         try:
             data = processor.get_rawdata_numpy(n_evts=spd.n_events-1,
                                         file=os.path.join(self.data_folder, data_file_basename),
                                         bit_of_daq=14,
                                         headersize=4,inversion=False)
-            spd.start_index, spd.end_index = 1000, spd.n_events-1-500 #first 1000 events are noisy
+            spd.start_index, spd.end_index = truncate_event_front, spd.n_events-1-truncate_event_back 
             print(f"analysing events from range: {spd.start_index} to {spd.end_index}")
         except Exception as e:
             print(e)
@@ -183,7 +185,7 @@ class PostProcessing:
                                         file=os.path.join(self.data_folder, data_file_basename),
                                         bit_of_daq=14,
                                         headersize=4,inversion=False)
-            spd.start_index, spd.end_index = 1000, 1999 #first 1000 events are noisy
+            spd.start_index, spd.end_index = truncate_event_front, 1999 #1999 is arbitary
 
 
         wfp = WaveformProcessor.WFProcessor(self.data_folder, volt_per_adc=2/2**14)
@@ -209,7 +211,7 @@ class PostProcessing:
 
         return
 
-    _v_process_run = np.vectorize(process_run_single_run)
+    _v_process_run = np.vectorize(process_run_single_run, otypes=[np.ndarray])
      
     def plot_waveforms(self, show_plot = False, save_plot = False, channels = []):
 

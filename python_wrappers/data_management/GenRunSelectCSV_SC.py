@@ -249,7 +249,7 @@ def single_data_file_to_dict(file_path: str) -> dict:
         return None
     return None
 
-v_single_data_file_to_dict = np.vectorize(single_data_file_to_dict)
+# v_single_data_file_to_dict = np.vectorize(single_data_file_to_dict, otypes=[np.ndarray])
 
 def data_files_to_csv(data_files: List[str], existing_df: pd.DataFrame = None, reprocess: bool = False):
     """

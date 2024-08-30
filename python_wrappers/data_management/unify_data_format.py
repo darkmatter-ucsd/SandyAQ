@@ -1,19 +1,15 @@
-from typing import List
+'''
+This is a tool to unify, if possible and desired, the data format of the meta-data json files.
+'''
+
+
 import os
 import glob
-import pandas as pd
 import json
 import re
 import numpy as np
-import configparser
 import sys
 import datetime
-
-from dataclasses import dataclass
-
-import WaveformProcessor
-sys.path.insert(0,"/home/daqtest/Processor/sandpro")
-import sandpro
 
 DATA_FOLDERS = [
     "/home/daqtest/DAQ/SandyAQ/softlink_to_data/all_data/",
@@ -54,9 +50,47 @@ v_meta_data_from_file_name = np.vectorize(get_meta_data_from_file_name)
 v_basename = np.vectorize(os.path.basename)
 v_dirname = np.vectorize(os.path.dirname)
 
+### step 1: create new meta data file (to be replaced in step 2)
+### check if everything make sense in the new meta data
 
+def step_1_add_record_length():
+    
+    # Check if "DATA_FOLDERS" is an aboslute path for a directory
+    for data_folder in DATA_FOLDERS:
+        if not os.path.isabs(data_folder) and not os.path.isdir(data_folder):
+            raise ValueError(f"{data_folder} is not an absolute path for a directory")
 
-def step1():
+    # Get the list of data files from DATA_FOLDERS
+    data_files_name = get_data_files(DATA_FOLDERS, pattern="meta_config*.json")
+    print(f"Found {len(data_files_name)} meta data files in {DATA_FOLDERS}")
+
+    file_name = v_basename(data_files_name)
+    dir_name = v_dirname(data_files_name)
+
+    #turn all list into np.array
+    data_files_name = np.array(data_files_name) # path + file name
+    file_name = np.array(file_name)
+    dir_name = np.array(dir_name)
+    
+    assert(len(file_name)==len(dir_name))
+
+    for i in range(len(file_name)):
+        
+        data_file = data_files_name[i]
+        print(f"Processing {data_file}")
+
+        with open(data_file, "r") as file:
+            meta_data = json.load(file)
+
+        new_meta_data = meta_data.copy()
+        new_meta_data["record_length"] = int(1000)
+
+        new_file_name = os.path.join(dir_name[i], f"new_{file_name[i]}")
+
+        with open(new_file_name, "w") as file:
+            json.dump(new_meta_data, file, indent=4)
+
+def step1_add_runtime():
 
     # Check if "DATA_FOLDERS" is an aboslute path for a directory
     for data_folder in DATA_FOLDERS:
@@ -130,7 +164,7 @@ def step1():
 
                 previous_runtime = _runtime
                 
-
+# replace the old meta data file by the new ones
 def step2():
     # Check if "DATA_FOLDERS" is an aboslute path for a directory
     for data_folder in DATA_FOLDERS:
@@ -153,4 +187,6 @@ def step2():
         os.rename(data_file, existing_data_file)
 
 if __name__ == "__main__":
+    # step1_add_runtime()
+    # step_1_add_record_length()
     step2()

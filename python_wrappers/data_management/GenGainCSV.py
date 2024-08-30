@@ -14,8 +14,8 @@ sys.path.insert(0,"../")
 # from dataclasses import dataclass
 import WaveformProcessor
 import FitSPE
-import util.d2d as d2d
-import util.utils as util
+import common.d2d as d2d
+import common.utils as util
 
 # @dataclass
 # class run_info_data:
