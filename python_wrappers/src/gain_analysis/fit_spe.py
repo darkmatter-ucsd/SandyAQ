@@ -3,6 +3,17 @@ from scipy.signal import find_peaks
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+import os
+import sys
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0,os.path.join(current_dir,"../"))
+from common.logger import setup_logger
+
+logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 
 class FitSPE:  
     def __init__(self, bias_voltage, n_hist, bin_edges, plot = True, 
@@ -27,6 +38,10 @@ class FitSPE:
         self.spe_position_error = np.nan
         self.gain = np.nan
         self.gain_error = np.nan
+        
+        # for checking
+        self.PE_rough_position = np.nan
+        self.PE_rough_amplitude = np.nan
         
         # checked by eyes that 0.03 is good, but can do a more serious cut
         self.good_fit_threshold = 0.03
@@ -69,6 +84,10 @@ class FitSPE:
         PE_rough_half_width = np.median(np.diff(PE_rough_position))/2
         PE_rough_amplitude = self.n_hist[peaks]
         PE_half_width_index = int(np.median(np.diff(peaks))/2) # PE width in index
+        
+        self.PE_rough_position = PE_rough_position
+        self.PE_rough_amplitude = PE_rough_amplitude
+        
 
         # if self.plot:
         #     plt.figure(figsize=(10,6))
@@ -80,19 +99,26 @@ class FitSPE:
         
         # Executing curve_fit on noisy data 
         for i, peak in enumerate(peaks[0:8]):
+            min_x = int(peak-PE_half_width_index)
+            max_x = int(peak+PE_half_width_index)
+            
+            if min_x < 0:
+                min_x = 0
             try:
-                min_x = int(peak-PE_half_width_index)
-                max_x = int(peak+PE_half_width_index)
-
                 (amp,mu,sig), pcov = curve_fit(self.gaussian_func, 
                                             self.bin_centers[min_x:max_x], 
                                             self.n_hist[min_x:max_x], 
                                             p0=[PE_rough_amplitude[i], 
                                                 PE_rough_position[i], 
                                                 PE_rough_half_width])
-                
                 perr = np.sqrt(np.diag(pcov))
                 
+            except RuntimeError as e:
+                logger.warning(e)
+                pass
+            except:
+                raise Exception
+            else:
                 self.amp_list.append(amp)
                 self.mu_list.append(mu)
                 self.sig_list.append(sig)
@@ -103,14 +129,6 @@ class FitSPE:
                 self.line_x.append(self.bin_centers[min_x:max_x])
                 self.line_y.append(ym)
 
-                # if self.plot:
-                    
-                #     plt.plot(self.bin_centers[min_x:max_x], ym ,zorder=10, color='r') 
-                #     # plt.text(0.9,0.9,f"")
-
-            except:
-                continue
-        
         peak_diff_media = np.median(np.diff(self.mu_list))
                 
         # if self.plot:
@@ -199,8 +217,9 @@ class FitSPE:
         
         # if the fit error of first peak is also good, 
         # it might be the SPE peak, include it to the SPE list
-        if self.mu_err_list[0] < self.good_fit_threshold:
-            gain_list = np.append([self.mu_list[0]],gain_list)
+        # if self.mu_err_list[0] < self.good_fit_threshold:
+        #     gain_list = np.append([self.mu_list[0]],gain_list)
+        # turns out this introduce error to the gain
             
         # sort in ascending order the SPE guess
         # give a bias on smallest guess (more likely to have 
