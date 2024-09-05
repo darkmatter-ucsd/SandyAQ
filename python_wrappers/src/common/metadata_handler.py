@@ -17,12 +17,12 @@ import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
 from common.logger import setup_logger
-from data_processing.run_info import RunInfo
+import data_processing.run_info as run_info
 
 # logger = setup_logger(__name__)
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 
-class MetadataHandler(RunInfo):
+class MetadataHandler(run_info.RunInfo):
     
     """
     A class to handle metadata information of a single bin or JSON file.
@@ -38,6 +38,8 @@ class MetadataHandler(RunInfo):
     """
     
     def __init__(self, filepath: str):
+        
+        super().__init__()
         
         # self.run_info = run_info.RunInfo()
         self.failure_flag = False

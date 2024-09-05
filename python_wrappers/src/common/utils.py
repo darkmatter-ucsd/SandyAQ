@@ -21,7 +21,7 @@ def _re_search(pattern: str, string):
     else:
         return bool(re.search(pattern, string))
 
-vec_regex_search = np.vectorize(_re_search, excluded=["pattern"])
+vec_regex_search = np.vectorize(_re_search, excluded=["pattern"], otypes=[np.ndarray])
 
 
 # def load_run_info(path = "../run_info.csv"):
@@ -45,7 +45,7 @@ def extract_date_meta_data(meta_data_path):
     # Parse the datetime using the format YYYYMMDD_HHMMSS
     return datetime.strptime(datetime_str, '%Y%m%d_%H%M%S')
 
-v_extract_date_meta_data = np.vectorize(extract_date_meta_data)
+# v_extract_date_meta_data = np.vectorize(extract_date_meta_data, otypes=[np.ndarray])
 
 def extract_channel_meta_data(meta_data_path):
 
@@ -56,7 +56,7 @@ def extract_channel_meta_data(meta_data_path):
 
     return channel
 
-v_extract_channel_meta_data = np.vectorize(extract_channel_meta_data)
+# v_extract_channel_meta_data = np.vectorize(extract_channel_meta_data, otypes=[np.ndarray])
 
 def adc_to_mv(adc, DCOFFSET=+50, vpp=2.0, bit_of_daq=14): #DC offset should be +50 instead of 40, legacy
     #DC OFFSET = +40: -0.2 - 1.8
@@ -67,7 +67,7 @@ def adc_to_mv(adc, DCOFFSET=+50, vpp=2.0, bit_of_daq=14): #DC offset should be +
     # voltage_per_adc = vpp / (2**bit_of_daq-1)
     return (adc/(2**bit_of_daq-1) * vpp + start_voltage) * 1000
 
-v_adc_to_mv = np.vectorize(adc_to_mv)
+# v_adc_to_mv = np.vectorize(adc_to_mv, otypes=[np.ndarray])
 
 def mv_to_adc(mv, DCOFFSET=+50, vpp=2.0, bit_of_daq=14):
     start_voltage = (DCOFFSET/50) -1.0
@@ -75,7 +75,7 @@ def mv_to_adc(mv, DCOFFSET=+50, vpp=2.0, bit_of_daq=14):
     # voltage_per_adc = vpp / (2**bit_of_daq-1)
     return (mv/1000 - start_voltage) / vpp * (2**bit_of_daq-1)
 
-v_mv_to_adc = np.vectorize(mv_to_adc)
+v_mv_to_adc = np.vectorize(mv_to_adc, otypes=[np.ndarray])
 
 def V_to_adc(V, DCOFFSET=+40, vpp=2.0, bit_of_daq=14):
     start_voltage = (DCOFFSET/50) -1.0
@@ -83,4 +83,4 @@ def V_to_adc(V, DCOFFSET=+40, vpp=2.0, bit_of_daq=14):
     # voltage_per_adc = vpp / (2**bit_of_daq-1)
     return (V - start_voltage) / vpp * (2**bit_of_daq-1)
 
-v_V_to_adc = np.vectorize(mv_to_adc)
+# v_V_to_adc = np.vectorize(mv_to_adc, otypes=[np.ndarray])

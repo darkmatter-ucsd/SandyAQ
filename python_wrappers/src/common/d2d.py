@@ -18,6 +18,7 @@ import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
 from common.logger import setup_logger
+import data_processing.run_info as run_info
 
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 
@@ -26,6 +27,12 @@ class data(Sequence):
     def __init__(self, input: object):
         self.import_data(input)
         super().__init__()
+        
+    def __len__(self):
+        # the length of all array should be the same
+        # so just picked a random one
+        first = next(iter(self.__dict__.values()))
+        return len(first)
     
     def import_data(self, input: object):
         if isinstance(input, pd.DataFrame):
@@ -36,8 +43,9 @@ class data(Sequence):
             raise TypeError("Input should be either pd.DataFrame or dict")
         
     def import_df(self, df: pd.DataFrame):
-        for col_name in df.columns:
-            setattr(self, col_name, df[col_name].to_numpy())
+        # for col_name in df.column():
+        for series_name, series in df.items():
+            setattr(self, series_name, series.to_numpy())
             
     def import_dict(self, dictionary: dict):
         for var_name in dictionary.keys():
@@ -54,11 +62,11 @@ class data(Sequence):
         if not dry:
             logger.info(f"Before cut: {len(self)}")
         new_dict = {}
-        for i in self.__dict__.keys():
+        for column in self.__dict__.keys():
             if inplace:
-                self.__dict__[i] = self.__dict__[i][mask]
+                self.__dict__[column] = self.__dict__[column][mask]
             else:
-                new_dict[i] = self.__dict__[i][mask]
+                new_dict[column] = self.__dict__[column][mask]
         
         if not dry:
             logger.info(f"After cut: {len(self)}")
@@ -68,16 +76,32 @@ class data(Sequence):
         else:
             return data(new_dict)
         
-    def __len__(self):
-        # the length of all array should be the same
-        # so just picked a random one
-        first = next(iter(self.__dict__.values()))
-        return len(first)
-    
-    def __getitem__(self, index):
+    def get_run_info(self, row: int) -> run_info.RunInfo:
+        """
+        Return run_info.RunInfo from the row of the df from 
+        d2d.data class with a given index or row_id.
+
+        Args:
+            row (int): which row of the df
+
+        Returns:
+            run_info.RunInfo: coverted run_info.RunInfo from
+            the row of the df from the d2d.data class
+        """
+        tmp_info = run_info.RunInfo()
+        single_run = self[row]
+        
+        for column in tmp_info.__dict__.keys():
+            tmp_info.__dict__[column] = single_run.__dict__[column]
+            
+        return tmp_info
+        
+    def __getitem__(self, row):
         # so that the class is index-able
         new_dict = {}
-        for i in self.__dict__.keys():
-            new_dict[i] = self.__dict__[i][index]
+        for column in self.__dict__.keys():
+            new_dict[column] = self.__dict__[column][row]
         return data(new_dict)
+        
+        
             

@@ -17,7 +17,7 @@ sys.path.insert(0,os.path.join(current_dir,"../"))
 # from data_processing.run_info import RunInfo
 import data_processing.run_info as run_info
 import data_processing.event_processor as event_processor
-import fit_spe as FitSPE
+import gain_analysis.fit_spe as fit_spe
 import common.d2d as d2d
 import common.utils as util
 import common.config_reader as common_config_reader
@@ -83,33 +83,30 @@ class GainProcessor:
         
         return all_runs
     
-    def process_single_run(self, single_run: d2d.data):
+    def process_single_run(self, bin_full_path: str, 
+                                number_of_events: int, 
+                                record_length_sample: int,
+                                voltage_preamp1_V: float,
+                                set_waveform=False):
+        EventProcessor = event_processor.EventProcessor(bin_full_path,
+                                            number_of_events,
+                                            record_length_sample)
+        EventProcessor.process_all_events(set_waveform = set_waveform)
         
-        tmp_info = run_info.RunInfo()
-        tmp_info.bin_full_path = str(single_run.bin_full_path)
-        tmp_info.number_of_events = int(single_run.number_of_events)
-        tmp_info.record_length_sample = int(single_run.record_length_sample)
-        
-        voltage_preamp1_V = float(single_run.voltage_preamp1_V)
-        
-        logger.info(f"Processing file: {tmp_info.bin_full_path}")
-        
-        processed_events = event_processor.EventProcessor(run_info=tmp_info)
-        
-        
-        if processed_events.failure_flag == True:
+        if EventProcessor.failure_flag == True:
+            self.EventProcessor = None
             gain = np.nan
             gain_err = np.nan
         else:
-            areas = processed_events.areas
-            hist_count,bin_edges = np.histogram(areas,bins=self.hist_n_bins,range=self.hist_range)
+            self.EventProcessor = EventProcessor
+            self.areas = EventProcessor.areas
+            self.heights = EventProcessor.heights
+            self.hist_count,self.bin_edges = np.histogram(self.areas,bins=self.hist_n_bins,range=self.hist_range)
 
             # voltage_preamp1_V helps to predetermine the peak distance
-            spe_fit = FitSPE.FitSPE(voltage_preamp1_V, 
-                                    hist_count, 
-                                    bin_edges, 
-                                    show_plot=False, 
-                                    save_plot=False)
+            spe_fit = fit_spe.FitSPE(voltage_preamp1_V, 
+                                    self.hist_count, 
+                                    self.bin_edges)
             
             # fig, ax = plt.subplots()
             # ax.plot(bin_edges[:-1],hist_count)
@@ -118,14 +115,16 @@ class GainProcessor:
             #     ax.axvline(i,c = "tab:green")
             
             if not (np.isnan(spe_fit.gain) or np.isnan(spe_fit.gain_error)):
+                self.spe_fit = spe_fit
                 gain = spe_fit.gain
                 gain_err = spe_fit.gain_error
 
             else:
+                self.spe_fit = None
                 gain = np.nan
                 gain_err = np.nan
                 
-                logger.warning(f"Cannot fit for file: {tmp_info.bin_full_path}")
+                logger.warning(f"Cannot fit for file: {bin_full_path}")
                 
             # plt.savefig("./test.png")
             # input("Press Enter to continue...")
@@ -141,8 +140,14 @@ class GainProcessor:
         gain_err_list = []
         
         for i in range(len(all_runs_d2d)):
-            single_run = all_runs_d2d[i]
-            gain, gain_err = self.process_single_run(single_run)
+            # convert one row into run_info
+            single_run_info = all_runs_d2d.get_run_info(i)
+            logger.info(f"Processing file: {single_run_info.bin_full_path}")
+            
+            gain, gain_err = self.process_single_run(single_run_info.bin_full_path,
+                                                     single_run_info.number_of_events,
+                                                     single_run_info.record_length_sample,
+                                                     single_run_info.voltage_preamp1_V)
         
             gain_list.append(gain)
             gain_err_list.append(gain_err)

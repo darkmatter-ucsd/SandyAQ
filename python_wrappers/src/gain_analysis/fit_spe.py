@@ -16,8 +16,7 @@ from common.logger import setup_logger
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 
 class FitSPE:  
-    def __init__(self, bias_voltage, n_hist, bin_edges, plot = True, 
-                 show_plot=False, save_plot=True, output_name = ''):
+    def __init__(self, bias_voltage, n_hist, bin_edges):
 
         self.amp_list = []
         self.mu_list = []
@@ -29,10 +28,10 @@ class FitSPE:
         self.bias_voltage = bias_voltage
         self.n_hist = n_hist
         self.bin_edges = bin_edges
-        self.plot = plot
-        self.show_plot = show_plot
-        self.save_plot = save_plot
-        self.output_name = output_name
+        # self.plot = plot
+        # self.show_plot = show_plot
+        # self.save_plot = save_plot
+        # self.output_name = output_name
         
         self.spe_position = np.nan
         self.spe_position_error = np.nan
@@ -101,8 +100,13 @@ class FitSPE:
         for i, peak in enumerate(peaks[0:8]):
             min_x = int(peak-PE_half_width_index)
             max_x = int(peak+PE_half_width_index)
-            
+            compensation_length = 0
             if min_x < 0:
+                # after setting min_x to 0 so that indexing not 
+                # out of bound, but then the arrays size will be
+                # different, so need to use the compensation for
+                # line_x and line_y
+                compensation_length = 0 - min_x
                 min_x = 0
             try:
                 (amp,mu,sig), pcov = curve_fit(self.gaussian_func, 
@@ -123,10 +127,16 @@ class FitSPE:
                 self.mu_list.append(mu)
                 self.sig_list.append(sig)
                 self.mu_err_list.append(perr[1])
+                
+                if compensation_length > 0:
+                    compensation = np.zeros(int(compensation_length), dtype = self.bin_centers[0])
+                    line_x = np.concatenate((compensation,self.bin_centers[min_x:max_x]))
+                else:
+                    line_x = self.bin_centers[min_x:max_x]
 
-                ym = self.gaussian_func(self.bin_centers[min_x:max_x], amp, mu, sig) 
-
-                self.line_x.append(self.bin_centers[min_x:max_x])
+                ym = self.gaussian_func(line_x, amp, mu, sig) 
+                
+                self.line_x.append(line_x)
                 self.line_y.append(ym)
 
         peak_diff_media = np.median(np.diff(self.mu_list))

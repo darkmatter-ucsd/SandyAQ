@@ -23,6 +23,7 @@ from common.logger import setup_logger
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 
 class RunProcessor:
+    ""
     def __init__(self):
         
         self.failure_flag = True
@@ -55,7 +56,7 @@ class RunProcessor:
                     
         return data_files
 
-    def update_info_from_filename(self, md_full_path: str) -> None:
+    def update_info_from_metafile(self, md_full_path: str) -> None:
         
         self.metadata = metadata_handler.MetadataHandler(md_full_path)
         
@@ -88,30 +89,33 @@ class RunProcessor:
         
         return
     
-    def update_info_processed_events(self):
+    def update_info_processed_events(self, set_waveform = False):
         
         if self.failure_flag == False:
-            processed_events = event_processor.EventProcessor(run_info=self.info)
-
-            if processed_events.failure_flag == False:
-                self.info.baseline_n_samples = processed_events.baseline_n_samples
-                self.info.baseline_n_samples_avg = processed_events.baseline_n_samples_avg
-                self.info.n_channels = processed_events.n_channels
+            self.EventProcessor = event_processor.EventProcessor(self.info.bin_full_path,
+                                                    self.info.number_of_events,
+                                                    self.info.record_length_sample)
+            self.EventProcessor.process_all_events(set_waveform = set_waveform)
+            
+            if self.EventProcessor.failure_flag == False:
+                self.info.baseline_n_samples = self.EventProcessor.baseline_n_samples
+                self.info.baseline_n_samples_avg = self.EventProcessor.baseline_n_samples_avg
+                self.info.n_channels = self.EventProcessor.n_channels
                 
-                self.info.baseline_std = processed_events.baseline_std
-                self.info.baseline_mean = processed_events.baseline_mean
-                self.info.n_processed_events = processed_events.n_processed_events
-                self.info.start_index = processed_events.start_index
+                self.info.baseline_std = self.EventProcessor.baseline_std
+                self.info.baseline_mean = self.EventProcessor.baseline_mean
+                self.info.n_processed_events = self.EventProcessor.n_processed_events
+                self.info.start_index = self.EventProcessor.start_index
                 
             else: 
                 self.failure_flag = True
                 
         return
                
-    def single_data_file_to_dict(self, md_full_path: str):
+    def single_data_file_to_dict(self, md_full_path: str, set_waveform = False):
 
-        self.update_info_from_filename(md_full_path)
-        self.update_info_processed_events()
+        self.update_info_from_metafile(md_full_path)
+        self.update_info_processed_events(set_waveform = set_waveform)
         
         if self.failure_flag == False:
             return self.info.__dict__
@@ -185,6 +189,8 @@ class RunProcessor:
         
         # Just to check if the data_files are being processed correctly
         for data_file in data_files:
+            self.failure_flag = True # refresh the flag in loop
+            
             data = self.single_data_file_to_dict(data_file) 
 
             # Create a DataFrame from the new data -> csv; write to file in append mode
