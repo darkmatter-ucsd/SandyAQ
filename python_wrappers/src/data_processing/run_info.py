@@ -44,6 +44,7 @@ class RunInfo:
         self.run_id: int = np.nan 
       
     def set_run_info_from_dict(self, run_info: dict):
-        for column in run_info.keys():
-            self.__dict__[column] = run_info[column]
+        for column in self.__dict__.keys():
+            if column in run_info:
+                self.__dict__[column] = run_info[column]
         return

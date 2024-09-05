@@ -11,7 +11,6 @@ import numpy as np
 import sys
 sys.path.insert(0,"/home/daqtest/Processor/sandpro")
 import pandas as pd
-from collections.abc import Sequence
 from dataclasses import dataclass
 import os
 
@@ -23,16 +22,9 @@ import data_processing.run_info as run_info
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 
 @dataclass
-class data(Sequence):
+class data():
     def __init__(self, input: object):
         self.import_data(input)
-        super().__init__()
-        
-    def __len__(self):
-        # the length of all array should be the same
-        # so just picked a random one
-        first = next(iter(self.__dict__.values()))
-        return len(first)
     
     def import_data(self, input: object):
         if isinstance(input, pd.DataFrame):
@@ -59,6 +51,9 @@ class data(Sequence):
         return self.__dict__
             
     def apply_mask(self, mask, inplace = False, dry = True):
+        
+        mask = mask.astype(bool)
+        
         if not dry:
             logger.info(f"Before cut: {len(self)}")
         new_dict = {}
@@ -88,20 +83,18 @@ class data(Sequence):
             run_info.RunInfo: coverted run_info.RunInfo from
             the row of the df from the d2d.data class
         """
-        tmp_info = run_info.RunInfo()
-        single_run = self[row]
         
-        for column in tmp_info.__dict__.keys():
-            tmp_info.__dict__[column] = single_run.__dict__[column]
+        df = self.get_df()
+        single_run = df.iloc[row].to_dict()
+        
+        RunInfo = run_info.RunInfo()
+        RunInfo.set_run_info_from_dict(single_run)
             
-        return tmp_info
-        
-    def __getitem__(self, row):
-        # so that the class is index-able
-        new_dict = {}
-        for column in self.__dict__.keys():
-            new_dict[column] = self.__dict__[column][row]
-        return data(new_dict)
-        
-        
-            
+        return RunInfo
+    
+    def __len__(self):
+        # the length of all array should be the same
+        # so just picked a random one
+        first = next(iter(self.__dict__.values()))
+        return len(first)
+
