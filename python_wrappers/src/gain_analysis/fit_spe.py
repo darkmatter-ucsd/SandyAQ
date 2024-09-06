@@ -59,7 +59,7 @@ class FitSPE:
             mean_peak_width = self.get_mean_peak_width()
             
             if self.n_good_fit >= 3:
-                self.get_gain(tolerance = mean_peak_width/2)
+                self.get_gain(tolerance = mean_peak_width/5)
                 
             
     def guess_peaks(self, distance_rough_guess = 0.5):
@@ -80,7 +80,8 @@ class FitSPE:
         # if self.n_peaks > 1:
         
         PE_rough_position = self.bin_centers[peaks] # unit: V*ns
-        PE_rough_half_width = np.median(np.diff(PE_rough_position))/2
+        # PE_rough_half_width = np.median(np.diff(PE_rough_position))/2
+        PE_rough_half_width = np.min(np.diff(PE_rough_position))
         PE_rough_amplitude = self.n_hist[peaks]
         PE_half_width_index = int(np.median(np.diff(peaks))/2) # PE width in index
         
@@ -100,14 +101,24 @@ class FitSPE:
         for i, peak in enumerate(peaks[0:8]):
             min_x = int(peak-PE_half_width_index)
             max_x = int(peak+PE_half_width_index)
-            compensation_length = 0
+            compensation_length_min = 0
+            compensation_length_max = 0
+            len_bin_centers = len(self.bin_centers)
             if min_x < 0:
                 # after setting min_x to 0 so that indexing not 
                 # out of bound, but then the arrays size will be
                 # different, so need to use the compensation for
                 # line_x and line_y
-                compensation_length = 0 - min_x
+                compensation_length_min = 0 - min_x
                 min_x = 0
+            elif max_x > len_bin_centers:
+                # after setting min_x to 0 so that indexing not 
+                # out of bound, but then the arrays size will be
+                # different, so need to use the compensation for
+                # line_x and line_y
+                compensation_length_max = max_x - len_bin_centers
+                max_x = len_bin_centers
+                
             try:
                 (amp,mu,sig), pcov = curve_fit(self.gaussian_func, 
                                             self.bin_centers[min_x:max_x], 
@@ -125,12 +136,18 @@ class FitSPE:
             else:
                 self.amp_list.append(amp)
                 self.mu_list.append(mu)
-                self.sig_list.append(sig)
+                if sig<0: # somehow abs doesn't work
+                    self.sig_list.append(-sig)
+                else:
+                    self.sig_list.append(sig)
                 self.mu_err_list.append(perr[1])
                 
-                if compensation_length > 0:
-                    compensation = np.zeros(int(compensation_length), dtype = self.bin_centers[0])
+                if compensation_length_min > 0:
+                    compensation = np.zeros(int(compensation_length_min), dtype = self.bin_centers[0])
                     line_x = np.concatenate((compensation,self.bin_centers[min_x:max_x]))
+                elif compensation_length_max > 0:
+                    compensation = np.ones(int(compensation_length_max), dtype = self.bin_centers[0])*self.bin_centers[-1]
+                    line_x = np.concatenate((self.bin_centers[min_x:max_x], compensation))
                 else:
                     line_x = self.bin_centers[min_x:max_x]
 
@@ -167,6 +184,7 @@ class FitSPE:
         self.amp_list = np.array(self.amp_list)
         self.mu_list = np.array(self.mu_list)
         self.sig_list = np.array(self.sig_list)
+        # self.sig_list = np.abs(np.array((self.sig_list.copy())))
         self.mu_err_list = np.array(self.mu_err_list)
         self.line_x = np.array(self.line_x, dtype=object) ## FIXME: the dimension of linex might not be the same, max_x out of range
         self.line_y = np.array(self.line_y, dtype=object)
@@ -211,15 +229,19 @@ class FitSPE:
         
         # prevent the case where all good peaks were
         # exactly separated by a bad peak
-        if self.n_good_fit < float(len(self.mu_list))/2: 
-            consecutive_good_peaks = 0
-            for i in self.good_peaks:
-                if i == True:
-                    consecutive_good_peaks += 1
-                else:
-                    consecutive_good_peaks = 0
-            if i < 4:
-                return
+        # if self.n_good_fit <= len(self.mu_list)-self.n_good_fit+2: # if the number of good peak is less than bad peaks
+        consecutive_good_peaks = 0
+        max_n_consective_good_peaks = 0
+        for i in self.good_peaks:
+            if i == True:
+                consecutive_good_peaks += 1
+                if consecutive_good_peaks > max_n_consective_good_peaks:
+                    max_n_consective_good_peaks = consecutive_good_peaks
+            else:
+                consecutive_good_peaks = 0
+        
+        if (max_n_consective_good_peaks < len(self.mu_list) - self.n_good_fit) or (max_n_consective_good_peaks<3):
+            return
                     
         
         # calculated difference of all peaks with good enough fit 

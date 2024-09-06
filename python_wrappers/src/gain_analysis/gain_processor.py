@@ -113,14 +113,13 @@ class GainProcessor:
             # ax.scatter(spe_fit.PE_rough_position,spe_fit.PE_rough_amplitude)
             # for i in spe_fit.mu_list:
             #     ax.axvline(i,c = "tab:green")
+            self.spe_fit = spe_fit
             
             if not (np.isnan(spe_fit.gain) or np.isnan(spe_fit.gain_error)):
-                self.spe_fit = spe_fit
                 gain = spe_fit.gain
                 gain_err = spe_fit.gain_error
 
             else:
-                self.spe_fit = None
                 gain = np.nan
                 gain_err = np.nan
                 

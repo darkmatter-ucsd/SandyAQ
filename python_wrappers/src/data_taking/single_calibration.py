@@ -22,8 +22,11 @@ import threading
 import time
 import subprocess
 
-import WaveformProcessor
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0,os.path.join(current_dir,"../"))
 import common.utils as util
+import data_processing.waveform_processor as waveform_processor
+
 sys.path.insert(0,"/home/daqtest/Processor/sandpro")
 import sandpro
 
@@ -259,7 +262,7 @@ class SingleCalibration:
                                             headersize=4,inversion=False)
                 start_index, end_index = 0, 119
             
-            wfp = WaveformProcessor.WFProcessor(data_folder, volt_per_adc=2/2**14)
+            wfp = waveform_processor.WFProcessor(data_folder, volt_per_adc=2/2**14)
             wfp.set_data(data["data_per_channel"][start_index:end_index,0], in_adc = False)
             wfp.process_wfs()
             
@@ -317,7 +320,7 @@ class SingleCalibration:
         metadata_list = self.get_list_metadata_from_folder(calibration_path, 
                                                            self.user_input_data_taking_setting["channel_list"])
         
-        self.data_taking_settings["channel_threshold_dict"] = self._get_adc_threshold_from_calibration(calibration_path, 
+        self.data_taking_settings["channel_threshold_dict"] = self.get_adc_threshold_from_calibration(calibration_path, 
                                                                                                        metadata_list)
         self.tmp_config_files = self._gen_tmp_configs(calibration=False)
         
