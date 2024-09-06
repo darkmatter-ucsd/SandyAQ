@@ -39,6 +39,9 @@ class RunInfo:
         self.baseline_std: float = np.nan
         self.baseline_mean: float = np.nan
         
+        self.hist_count: float = np.nan
+        self.bin_edges: float = np.nan
+        
         # run_id is assigned after processing all data and sorted by date_time
         # see run_processor.process_runs()
         self.run_id: int = np.nan 

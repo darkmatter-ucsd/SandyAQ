@@ -2,12 +2,10 @@ from typing import List
 import os
 import glob
 import pandas as pd
-import json
 import numpy as np
 import sys
 
-import datetime
-import csv
+import json
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -21,6 +19,10 @@ import common.metadata_handler as metadata_handler
 from common.logger import setup_logger
 
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
+
+# class MyTable(tables.IsDescription):
+#     bin_full_path = tables.StringCol(itemsize=200) 
+#     md_full_path = tables.StringCol(itemsize=200) 
 
 class RunProcessor:
     ""
@@ -37,8 +39,23 @@ class RunProcessor:
         
         self.reprocess = self.config.getboolean('RUN_PROCESSOR_SETTINGS', 'reprocess')
         
+        self.hist_n_bins = int(self.config.get('GAIN_PROCESSOR_SETTINGS', 'hist_n_bins'))
+        
+        
+        tmp = self.config.get("GAIN_PROCESSOR_SETTINGS", "hist_range")
+        tmp = tmp.split(' ')
+        self.hist_range = (float(tmp[0]),float(tmp[1]))
+        
+        self.hdf5_key = self.config.get('RUN_PROCESSOR_SETTINGS', 'hdf5_key')
+        
+        self.hdf5_size_dict = {"bin_full_path":350, 
+                                "md_full_path":350,
+                                "run_tag":100,
+                                "comment":350,
+                                "hist_count":800}
+        
         self.info = run_info.RunInfo()
-
+        
     def get_data_files(self, data_directories: List[str], exclude_directories: List[str]) -> List[str]:
         """
         Get all the data files in the given data directories
@@ -53,6 +70,15 @@ class RunProcessor:
                 # Find matching files
                 data_files_name = glob.glob(os.path.join(root, "meta_config_*.json"))
                 data_files.extend(data_files_name)
+                
+        max_length = self.hdf5_size_dict["bin_full_path"]
+        for i in data_files:
+            if len(i)>max_length:
+                max_length = len(i)
+        
+        if self.hdf5_size_dict["bin_full_path"] != max_length:
+            logger.info("Need to reprocess all files as the path lengths are too long.")
+            self.reprocess = True
                     
         return data_files
 
@@ -102,6 +128,12 @@ class RunProcessor:
                 self.info.baseline_n_samples_avg = self.EventProcessor.baseline_n_samples_avg
                 self.info.n_channels = self.EventProcessor.n_channels
                 
+                areas = self.EventProcessor.areas
+                
+                self.info.hist_count,self.info.bin_edges = np.histogram(areas,bins=self.hist_n_bins,range=self.hist_range)
+                self.info.hist_count = self.info.hist_count
+                self.info.bin_edges = self.info.bin_edges
+                
                 self.info.baseline_std = self.EventProcessor.baseline_std
                 self.info.baseline_mean = self.EventProcessor.baseline_mean
                 self.info.n_processed_events = self.EventProcessor.n_processed_events
@@ -132,13 +164,16 @@ class RunProcessor:
         - find the corresponding meta file
         - read voltage, temperature from the meta file
         """
-        
+        existing_df = None
         if os.path.exists(self.output_file):
-            existing_df = pd.read_csv(self.output_file, parse_dates=["date_time"],delimiter=",",quotechar='"', skipinitialspace=True, encoding="utf-8")
-            logger.info(f"Run info for {len(existing_df)} runs found in {self.output_file}")
-        else:
-            existing_df = None
-
+            hdf = pd.HDFStore(self.output_file, mode="r+")
+            if self.hdf5_key in hdf:
+                existing_df = pd.read_hdf(self.output_file, key=self.hdf5_key, mode="r+")
+                logger.info(f"Run info for {len(existing_df)} runs found in {self.output_file}")
+            else:
+                reprocess = True
+                logger.info(f"Cannot find the hdf5_key in the file. Need a new data file.")
+            hdf.close()
         n_columns = len(self.info.__dict__)
 
         # Check if the existing DataFrame has the same number of columns as the new data
@@ -160,11 +195,30 @@ class RunProcessor:
             
             logger.info(f"Processing {len(data_files)} new files")
             
-        elif (len(data_files) != 0):
-            # write the header to csv file
+            # self.hdf_read_mode = "a"
+            
+        elif (len(data_files) != 0): # and if need to reprocess
             logger.info(f"Processing {len(data_files)} new files")
-            data_df = pd.DataFrame(columns=self.info.__dict__.keys())
-            data_df.iloc[:0].to_csv(self.output_file, index=False, quoting=csv.QUOTE_NONNUMERIC)
+            
+            hdf = pd.HDFStore(self.output_file, mode='w')
+            hdf.close()            
+            
+            # self.hdf_read_mode = "w"
+            # self.hdf = pd.HDFStore(self.output_file, mode='w')
+            
+            # data_df = pd.DataFrame(columns=self.info.__dict__.keys())
+            
+
+            # Create the table in the HDF5 file
+            # with tables.open_file(self.output_file, mode='w') as h5file:
+            #     group = h5file.create_group("/", 'data_group', 'Data Group')
+            #     table = h5file.create_table(group, 'data_table', MyTable, 'Table with custom schema')
+            #     table.flush()
+                
+            # self.hdf5_key = self.hdf5_key + "/data+"
+                
+            # write the header to hdf file
+            # data_df.to_hdf(self.output_file, key=self.hdf5_key, mode="w", format='table')
         else:
             logger.info("No new files to process")
             return
@@ -187,27 +241,39 @@ class RunProcessor:
         # Generate the updated run_info DataFrame; write into self.output_file
         data_files = self.check_which_to_process(data_files, reprocess=self.reprocess)
         
+        
+        
         # Just to check if the data_files are being processed correctly
         for data_file in data_files:
             self.failure_flag = True # refresh the flag in loop
             
             data = self.single_data_file_to_dict(data_file) 
 
-            # Create a DataFrame from the new data -> csv; write to file in append mode
+            # Create a DataFrame from the new data -> hdf; write to file in append mode
             if isinstance(data,dict):
                 new_df = pd.DataFrame.from_dict([data])
-                new_df.to_csv(self.output_file, mode='a', index=False, 
-                            header=False, quoting=csv.QUOTE_NONNUMERIC)
+                # new_df.to_hdf(self.output_file, key=self.hdf5_key, mode='a', 
+                #               append=True, format='table')
+                
+                precision = 5
+                new_df['hist_count'] = new_df['hist_count'].apply(lambda x: json.dumps(np.around(x, precision).tolist()))
+                new_df['bin_edges'] = new_df['bin_edges'].apply(lambda x: json.dumps(np.around(x, precision).tolist()))
 
+                
+                hdf = pd.HDFStore(self.output_file, mode='a')
+                
+                hdf.append(self.hdf5_key, new_df, 
+                            data_columns=new_df.columns,
+                            index=False,
+                            min_itemsize=self.hdf5_size_dict)
+                hdf.close()
+
+        
         # Load the updated run_info DataFrame
         if os.path.exists(self.output_file):
-            # run_info_df = pd.read_csv(self.output_file)
-            run_info_df = pd.read_csv(self.output_file, 
-                                      parse_dates=["date_time"],
-                                      delimiter=",",
-                                      quotechar='"', 
-                                      skipinitialspace=True, 
-                                      encoding="utf-8")
+            run_info_df = pd.read_hdf(self.output_file, 
+                                      key=self.hdf5_key,
+                                      mode='r')
             
             # Sort the DataFrame by date and assign run_id
             run_info_df.sort_values("date_time", inplace=True)
@@ -215,7 +281,12 @@ class RunProcessor:
             run_info_df["run_id"] = run_info_df.index + 1
 
             # Save the updated run_info DataFrame to self.output_file
-            run_info_df.to_csv(self.output_file, index=False, quoting=csv.QUOTE_NONNUMERIC)
+            run_info_df.to_hdf(self.output_file, 
+                               key=self.hdf5_key,
+                               mode='w', 
+                               format='table',
+                               min_itemsize=self.hdf5_size_dict,
+                               data_columns=True)
 
             logger.info("Run info DataFrame updated and saved to" + str(self.output_file))
             
@@ -225,3 +296,4 @@ class RunProcessor:
 if __name__ == "__main__":
     processor = RunProcessor()
     processor.process_runs()
+    logger.info("Finished.")

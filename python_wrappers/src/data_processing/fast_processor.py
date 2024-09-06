@@ -77,7 +77,7 @@ class FastProcessor:
         
     def process_runs(self, n_random_WF = 100):
         if(len(self.list_of_files))==1:
-            self.list_of_fast_info = self.process_run_single_run(meta_data = self.list_of_files[0], 
+            self.list_of_fast_info = self.process_run_single_run(self.list_of_files[0], 
                                                                  n_random_WF = n_random_WF)
             # otherwise it will loop over the single file path
             # e.g. "/", "h", "o", "m", "e", ...
@@ -142,27 +142,27 @@ class FastProcessor:
     _v_process_run_single_run = np.vectorize(process_run_single_run, excluded=["n_random_WF"], otypes=[np.ndarray])
      
     def plot_waveforms(self, show_plot = False, save_plot = False, channels = []):
+        if isinstance(self.list_of_fast_info, list) or isinstance(self.list_of_fast_info, np.ndarray):
+            if(len(self.list_of_fast_info) == 0):
+                print("No data to plot. Run process_run first.")
+                return  
 
-        if(len(self.list_of_fast_info) == 0):
-            print("No data to plot. Run process_run first.")
-            return
-
-        # if len(channels) != 0:
-        #     mask = self.df['channel'].isin(channels)
-        #     df = self.df.loc[mask]
-        # else:
-        #     df = self.df
-        
-        # for i in range(len(self.list_of_fast_info)):
-        for fast_info in self.list_of_fast_info:
-            if len(channels) != 0 and (fast_info.channel in channels):
-                logger.info(f"Skipping channel {fast_info.channels}")
-                continue
-            else:
-                logger.info(f"Plotting for channel {fast_info.channel}")
-                self.plot_waveform_single_run(data = fast_info, 
-                                            show_plot = show_plot, 
-                                            save_plot = save_plot)
+            for fast_info in self.list_of_fast_info:
+                if len(channels) != 0 and (fast_info.channel in channels):
+                    logger.info(f"Skipping channel {fast_info.channels}")
+                    continue
+                else:
+                    logger.info(f"Plotting for channel {fast_info.channel}")
+                    self.plot_waveform_single_run(data = fast_info, 
+                                                show_plot = show_plot, 
+                                                save_plot = save_plot)
+    
+        elif isinstance(self.list_of_fast_info, FastInfo):
+            fast_info = self.list_of_fast_info
+            logger.info(f"Plotting for channel {fast_info.channel}")
+            self.plot_waveform_single_run(data = fast_info, 
+                                        show_plot = show_plot, 
+                                        save_plot = save_plot)
             
         return
     
@@ -208,14 +208,14 @@ class FastProcessor:
         axes[0,0].text(100,optimal_threshold_mv + _ymax/5,f"baseline mean: {1000 * data.baseline_mean:.1f} mV")
         axes[0,0].text(100,optimal_threshold_mv + _ymax/10,f"baseline std: {1000 * data.baseline_std:.2f} mV")
         axes[0,0].set_ylabel("Voltage [mV]",fontsize=self.fontsize)
-        axes[0,0].set_xlabel("ADC sample [ns]",fontsize=self.fontsize)
+        axes[0,0].set_xlabel("Time [ns]",fontsize=self.fontsize)
         # plot intergral window
         axes[0,0].fill_betweenx([200,_ymax], data.integral_window[0]*np.max(time), data.integral_window[1]*np.max(time), color='gray', alpha=0.5)
 
         axes[0,1].set_xlim(0,time[-1]-100)
         axes[0,1].set_ylim(-5,1600)
         axes[0,1].set_ylabel("Voltage [mV]",fontsize=self.fontsize)
-        axes[0,1].set_xlabel("ADC sample [ns]",fontsize=self.fontsize)
+        axes[0,1].set_xlabel("Time [ns]",fontsize=self.fontsize)
         
         _ymax = 350
         axes[1,0].set_xlim(0,time[-1]-100)
@@ -223,7 +223,7 @@ class FastProcessor:
         axes[1,0].text(100,optimal_threshold_mv + _ymax/20,f"baseline mean: {1000 * data.baseline_mean:.1f} mV")
         axes[1,0].text(100,optimal_threshold_mv + _ymax/40,f"baseline std: {1000 * data.baseline_std:.2f} mV")
         axes[1,0].set_ylabel("Voltage [mV]",fontsize=self.fontsize)
-        axes[1,0].set_xlabel("ADC sample [ns]",fontsize=self.fontsize)
+        axes[1,0].set_xlabel("Time [ns]",fontsize=self.fontsize)
         # plot intergral window
         axes[1,0].fill_betweenx([200,_ymax], data.integral_window[0]*np.max(time), data.integral_window[1]*np.max(time), color='gray', alpha=0.5)
         axes[1,0].axhline(1000 * data.baseline_mean, color="gray",linestyle="dashed",label=f"Baseline mean", zorder=10)
@@ -232,7 +232,7 @@ class FastProcessor:
         axes[1,1].set_xlim(0,time[-1]-100)
         axes[1,1].set_ylim(-5,_ymax)
         axes[1,1].set_ylabel("Voltage [mV]",fontsize=self.fontsize)
-        axes[1,1].set_xlabel("ADC sample [ns]",fontsize=self.fontsize)
+        axes[1,1].set_xlabel("Time [ns]",fontsize=self.fontsize)
 
 
         axes[2,0].hist(data.areas,
@@ -249,6 +249,11 @@ class FastProcessor:
         if not self.calibration_run:
             # try:
             # spe_fit = FitSPE.FitSPE(data.bias_voltage, hist_count, bin_edges, plot = False, show_plot=False, save_plot=False)
+            if (data.spe_fit != None):
+                
+                # mark found peaks
+                axes[2,0].scatter(data.spe_fit.PE_rough_position, data.spe_fit.PE_rough_amplitude)
+                
             if (data.spe_fit != None) and len(data.spe_fit.mu_list) > 0:
                 # mark good peaks
                 axes[2,0].plot(np.transpose(data.spe_fit.line_x[data.spe_fit.good_peaks]),
@@ -306,7 +311,7 @@ class FastProcessor:
 
         plt.legend(self.fontsize)
         if save_plot:
-            plt.savefig(os.path.join(figure_path,f"plot_{data.channel}_{data.timestamp_str}.png"))
+            plt.savefig(os.path.join(figure_path,f"plot_{data.channel}.png"))
         
         if not show_plot:
             plt.close()
