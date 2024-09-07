@@ -1,6 +1,8 @@
 #ifndef V1742_HH
 #define V1742_HH
 
+#define MAX_X742_NUM_BOARDS 8
+
 //cstdlib
 #include <vector>
 #include <string>
@@ -45,6 +47,7 @@ class V1742 : public Digitizer{
         std::vector<std::vector<uint32_t>> m_iGroupDCOffset;
         std::vector<std::vector<uint32_t>> m_iGroupTriggerThreshold;
         std::vector<uint32_t> m_iRecordLength;
+        std::vector<int> m_iCorrections;
 };
 
 #endif

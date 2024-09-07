@@ -52,6 +52,7 @@ int V1742::ReadX742SpecificParams(){
         int iDRS4Freq = r.Get<int>(sBoardCategory, "DRS4_FREQUENCY");
         m_iDRS4Frequency.push_back((CAEN_DGTZ_DRS4Frequency_t) iDRS4Freq);
         m_iRecordLength.push_back(r.Get<uint32_t>(sBoardCategory, "RECORD_LENGTH"));
+        m_iCorrections.push_back(r.Get<int>(sBoardCategory, "CORRECTIONS"));
 
         std::vector<uint32_t> GroupDCOffset(4);
         std::vector<uint32_t> GroupTriggerThreshold(4);
@@ -129,6 +130,14 @@ int V1742::ProgramDefault(int BoardNum) {
     //Channel group enabling. x742 specific settings
     ret |= CAEN_DGTZ_SetGroupEnableMask(handle, m_iEnableMask[BoardNum]);
     ret |= CAEN_DGTZ_SetDRS4SamplingFrequency(handle, m_iDRS4Frequency[BoardNum]);
+    
+    //Load and enable the correction tables
+    if (m_iCorrections[BoardNum]){
+        ret |= CAEN_DGTZ_LoadDRS4CorrectionData(handle, m_iDRS4Frequency[BoardNum]);
+        ret |= CAEN_DGTZ_EnableDRS4Correction(handle);
+        std::cout << "Corrections enabled for V1742 number "<<BoardNum<<"\n";
+    }
+    
     for(int i=0; i<(m_iNChannels[BoardNum]/8); i++) {
         if (m_iEnableMask[BoardNum] & (1<<i)) {
             if (BoardInfo.FamilyCode == CAEN_DGTZ_XX742_FAMILY_CODE) {

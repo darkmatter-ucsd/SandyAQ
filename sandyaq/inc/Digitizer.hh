@@ -44,6 +44,8 @@ class Digitizer {
         CommonConfig_t m_CommonConfig;
         int m_iNBoards = 0;
 
+        std::string m_BoardType;
+
         //Board settings
         uint32_t m_iNChannels[MAX_BOARDS];
         uint32_t m_iPostTriggers[MAX_BOARDS];

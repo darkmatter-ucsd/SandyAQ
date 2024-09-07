@@ -1,11 +1,12 @@
 #include "Digitizer.hh"
 
-Digitizer::Digitizer(std::string& sConfigFile, CommonConfig_t &CommonConfig, const char* BoardTypeName) {
+Digitizer::Digitizer(std::string& sConfigFile, CommonConfig_t &CommonConfig, const char* BoardTypeName) : m_BoardType(BoardTypeName){
     inih::INIReader r{ sConfigFile };
     int ret = 0;
 
     m_CommonConfig = CommonConfig;
     // std::vector<int> m_iBoardIndices;
+    // m_BoardType(BoardTypeName);
 
     for (int n=0; n < m_CommonConfig.sBoardTypes.size(); n++) {
         if (m_CommonConfig.sBoardTypes[n] == BoardTypeName){
