@@ -172,9 +172,11 @@ int main(int argc, char* argv[]) {
 
     // The number of events acquired is set by the user
 
-    uint64_t totalEvents = 0;
+    // uint64_t totalEvents = 0;
+    uint64_t totalEvents[iNTotBoards] = {0, 0}; // array to store n_events on each board
+    bool nEventsNotReached = true; // flag = True if any board has not accumulated the amount of data requested
     // use the sum of the number of events acquired by all the boards
-    while(totalEvents < iNEvts){
+    while(nEventsNotReached){
         iTotBoardIndex = 0;
         for (Digitizer* dgtz : digitizers) {
             for (int i = 0; i < dgtz->m_iNBoards; i++){
@@ -192,7 +194,10 @@ int main(int argc, char* argv[]) {
                     Nb[iTotBoardIndex] += iBufferSize;
                     Ne[iTotBoardIndex] += iNumEvents;
                     iNumEventsAcquired[iTotBoardIndex] +=iNumEvents;
-                    totalEvents += iNumEvents;
+
+                    totalEvents[iTotBoardIndex] += iNumEvents; // update the number of events for each board
+                    // if (iTotBoardIndex == 0){
+                    // }
                 }
 
 
@@ -215,6 +220,14 @@ int main(int argc, char* argv[]) {
                 iTotBoardIndex++;
             }
         }
+        
+        nEventsNotReached = false;
+        for (int i = 0; i < iNTotBoards; i++){
+            nEventsNotReached = nEventsNotReached || (totalEvents[i] < iNEvts);
+            std::cout << "Board " << i << " has accumulated " << totalEvents[i] << " events." << std::endl;
+
+        }
+
     }
     
     printf("Test done\n");
