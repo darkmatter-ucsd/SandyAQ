@@ -26,16 +26,29 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
 import common.utils as util
 import data_processing.waveform_processor as waveform_processor
+import common.config_reader as common_config_reader
 
 sys.path.insert(0,"/home/daqtest/Processor/sandpro")
 import sandpro
 
-class SingleCalibration:
+class SingleChannel_DataTaking:
 
     def __init__(self, data_taking_settings, 
                  config_template_path = "/home/daqtest/DAQ/SandyAQ/sandyaq/config/config_template.ini", 
-                 calibration = True):
+                 calibration = True,
+                 same_threshold = True):
         
+        self.common_cfg_reader = common_config_reader.ConfigurationReader()
+        self.config = self.common_cfg_reader.get_data_taking_config()
+
+        self.DAQ_module = self.config.get('DAQ_MODULE', 'DAQ')
+        self.bit_of_daq = int(self.config.get(self.DAQ_module, 'n_bits'))
+        self.vpp = float(self.config.get(self.DAQ_module, 'range'))
+        
+        self.DC_offset = self.config.get('DATA_TAKING_SETTINGS', 'DC_offset')
+        self.guessed_baseline_mV = float(self.config.get('DATA_TAKING_SETTINGS', 'guessed_baseline_mV'))
+        
+        self.same_threshold = same_threshold
         self.run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ/sandyaq/build/sandyaq"
         
         # check if the data_taking_settings is a dictionary, and have all of the required keys
@@ -55,9 +68,9 @@ class SingleCalibration:
         self.timeout = 1800 # in second; kill run after this time
 
         # calibration settings
-        self.n_calibration_events = 3000
-        self.calibration_start_index = 2000 # cannot be lower than this
-        self.calibration_timeout = 300 # in second; kill run after this time
+        self.n_calibration_events = 3000 # number - 500
+        self.calibration_start_index = 2000 # cannot be lower than 2000
+        self.calibration_timeout = 60 # in second; kill run after this time
 
         # check if the config_template is a string and exists
         if not isinstance(config_template_path, str):
@@ -96,7 +109,18 @@ class SingleCalibration:
         self.calib_data_taking_settings = self.user_input_data_taking_setting.copy()
         # set a very low threshold for all channels, to take noise data
         # data_settings["channel_threshold_dict"] = {0:2305,1:2269,2:2200,3:2209,4:2378,5:2274,6:2386,7:2516,8:2627,9:2316,10:2162,11:2066,12:2456,13:2446,14:2413,15:2192,16:2230,17:2468,18:2158,19:2090,20:2342,21:2258,22:2313,23:2266}
-        self.calib_data_taking_settings["channel_threshold_dict"] = {0:2297,1:2369,2:2400,3:2360,4:2390,5:2274,6:2386,7:2516,8:2585,9:2305,10:2300,11:2066,12:2414,13:2446,14:2277,15:2192,16:2230,17:2468,18:2158,19:2090,20:2280,21:2258,22:2313,23:2233}
+        # self.calib_data_taking_settings["channel_threshold_dict"] = {0:2297,1:2269,2:2200,3:2209,4:2390,5:2274,6:2386,7:2516,8:2585,9:2305,10:2162,11:2066,12:2414,13:2446,14:2277,15:2192,16:2230,17:2468,18:2158,19:2090,20:2280,21:2258,22:2313,23:2233} 
+        # self.calib_data_taking_settings["channel_threshold_dict"] = {0:2297,1:2369,2:2400,3:2360,4:2390,5:2274,6:2386,7:2516,8:2585,9:2305,10:2300,11:2066,12:2414,13:2446,14:2277,15:2192,16:2230,17:2468,18:2158,19:2090,20:2280,21:2258,22:2313,23:2233} # 106 deg
+        # self.calib_data_taking_settings["channel_threshold_dict"] = {0:2297,1:2369,2:2400,3:2300,4:2390,5:2274,6:2386,7:2516,8:2585,9:2305,10:2294,11:2358,12:2414,13:2446,14:2277,15:2292,16:2300,17:2468,18:2258,19:2190,20:2280,21:2258,22:2413,23:2233} # 106 deg
+        # self.calib_data_taking_settings["channel_threshold_dict"] = {0:2395,1:2380,2:2509,3:2327,4:2480,5:2391,6:2501,7:2596,8:2821,9:2363,10:2304,11:2169,12:2500,13:2537,14:2479,15:2329,16:2362,17:2632,18:2273,19:2214,20:2368,21:2346,22:2447,23:2354} # 106 deg
+        # self.calib_data_taking_settings["channel_threshold_dict"] = {0:550,1:560,2:570,3:510,4:690,5:530,6:700,7:825,8:825,9:550,10:500,11:340,12:740,13:810,14:620,15:520,16:570,17:710,18:420,19:420,20:580,21:580,22:630,23:450}
+        
+        guess_threshold = 700 + util.mv_to_adc(float(self.guessed_baseline_mV), DCOFFSET=int(self.DC_offset), vpp=float(self.vpp), bit_of_daq=int(self.bit_of_daq))
+        threshold_dict = {i:int(guess_threshold) for i in self.user_input_data_taking_setting["channel_list"]}
+        self.calib_data_taking_settings["channel_threshold_dict"] = threshold_dict
+
+        print(threshold_dict)
+        
         self.calib_data_taking_settings["number_of_events"] = self.n_calibration_events
         self.calib_data_taking_settings["output_folder"] = self.user_input_data_taking_setting["output_folder"] + "/threshold_calibration"
         self.calib_data_taking_settings["run_tag"] = "threshold_calibration"
@@ -134,22 +158,24 @@ class SingleCalibration:
                 continue
 
             # calculate the board number
-            if channel <= 15:
+            if channel <= 11:
                 board_number = 0
                 local_channel = channel
             else:
                 board_number = 1
-                local_channel = channel - 16
+                local_channel = channel - 12
             # then modify the config template
             new_config = deepcopy(self.config_template)
             new_config.set(f"BOARD-{board_number}", "CHANNEL_LIST", f"{local_channel}")
+            new_config.set(f"BOARD-{board_number}", "POST_TRIGGER", f"{0.9}")
+            
 
             section_name = f'BOARD-{board_number}_CHANNEL-{local_channel}'
             if not new_config.has_section(section_name):
                 new_config.add_section(section_name)
 
             # Add the new configuration to the BOARD-0 section
-            new_config.set(section_name, 'DC_OFFSET', '+40')
+            new_config.set(section_name, 'DC_OFFSET', str(self.DC_offset))
             new_config.set(section_name, 'TRIGGER_THRESHOLD', f'{data_taking_settings["channel_threshold_dict"][channel]}')
             new_config.set(section_name, 'CHANNEL_TRIGGER', 'ACQUISITION_ONLY')
             new_config.set(section_name, 'PULSE_POLARITY', '1')
@@ -180,8 +206,7 @@ class SingleCalibration:
     def get_list_metadata_from_folder(self, data_folder, channels = np.arange(0,24)):
         '''
         Inside the given data_folder, generate a list of metadata_file with the latest
-        metadata_file for each channel. channels can be specified, but currently not
-        implemented in the class
+        metadata_file for each channel. channels can be specified
         '''
         
         metadata_list = []
@@ -213,8 +238,8 @@ class SingleCalibration:
         
     def get_adc_threshold_from_calibration(self, data_folder, metadata_list):
 
-        baseline_mean_array = []
-        baseline_std_array = []
+        baseline_mean_V_array = []
+        baseline_std_V_array = []
         channels = []
 
         for i, meta_data in enumerate(metadata_list):
@@ -266,21 +291,28 @@ class SingleCalibration:
             wfp.set_data(data["data_per_channel"][start_index:end_index,0], in_adc = False)
             wfp.process_wfs()
             
-            baseline_std = np.mean(wfp.baseline_rms)
-            baseline_mean = np.mean(wfp.baseline)
-            baseline_mean_array.append(baseline_mean)
-            baseline_std_array.append(baseline_std)
+            baseline_std_V = np.mean(wfp.baseline_std_V)
+            baseline_mean_V = np.mean(wfp.baseline_mean_V)
+            baseline_mean_V_array.append(baseline_mean_V)
+            baseline_std_V_array.append(baseline_std_V)
             channels.append(channel)
 
-        baseline_mean_array = np.array(baseline_mean_array)
-        baseline_std_array = np.array(baseline_std_array)
+        baseline_mean_V_array = np.array(baseline_mean_V_array)
+        baseline_std_V_array = np.array(baseline_std_V_array)
 
-        # threshold_mV = (baseline_mean_array + 2 * (2 * np.sqrt(2) * baseline_std_array)) * 1000
-        threshold_mV = (baseline_mean_array + self.threshold_multiplier[channels] * baseline_std_array) * 1000
-
+        # threshold_mV = (baseline_mean_V_array + 2 * (2 * np.sqrt(2) * baseline_std_V_array)) * 1000
+        threshold_mV = (baseline_mean_V_array + self.threshold_multiplier[channels] * baseline_std_V_array) * 1000
         threshold_adc = util.v_mv_to_adc(threshold_mV)
         
-        threshold_dict = {i:int(thres) for i, thres in enumerate(threshold_adc.astype(int))}
+        # test change
+        max_threshold_adc = util.v_mv_to_adc((baseline_mean_V_array + self.threshold_multiplier[channels] * np.max(baseline_std_V_array)) * 1000)
+        # max_threshold_adc = np.max(threshold_adc) * np.ones(len(threshold_adc))
+
+        if self.same_threshold:
+            threshold_dict = {i:int(thres) for i, thres in enumerate(max_threshold_adc.astype(int))}
+        else:
+            threshold_dict = {i:int(thres) for i, thres in enumerate(threshold_adc.astype(int))}
+
 
         return threshold_dict
    
@@ -320,9 +352,8 @@ class SingleCalibration:
         metadata_list = self.get_list_metadata_from_folder(calibration_path, 
                                                            self.user_input_data_taking_setting["channel_list"])
         
-        self.data_taking_settings["channel_threshold_dict"] = self.get_adc_threshold_from_calibration(calibration_path, 
-                                                                                                       metadata_list)
-        self.tmp_config_files = self._gen_tmp_configs(calibration=False)
+        self.data_taking_settings["channel_threshold_dict"] = self.get_adc_threshold_from_calibration(calibration_path, metadata_list)
+        # self.tmp_config_files = self._gen_tmp_configs(calibration=False)
         
         return
     
@@ -340,7 +371,9 @@ class SingleCalibration:
         
         return 
     
-    def run(self, dry_run = False, calibration = False):
+    def run(self, dry_run = False, calibration = False, set_timeout = False):
+        
+        
         if dry_run: # This is not doing anything?? -> Yue
                 print(f"Running sandyaq -c {tmp_config_file} -n {self.data_taking_settings['number_of_events']} -d {base_path} -f {data_file_name}")
                 raise ValueError("Dry run not implemented yet. Please set dry_run to False. Exiting...")
@@ -348,6 +381,7 @@ class SingleCalibration:
         if calibration:
             data_taking_settings = self.calib_data_taking_settings
         else:
+            self.tmp_config_files = self._gen_tmp_configs(calibration=False)
             data_taking_settings = self.data_taking_settings
         
         # get the current timestamp (global to all channel for the same run), and add it to the file name
@@ -357,9 +391,9 @@ class SingleCalibration:
         number_of_events = data_taking_settings["number_of_events"]
         # meta_file_name = os.path.join(base_path, f"meta_{data_file_name}.json")
         
-        runtime_csv_file = os.path.join(base_path, f"runtime_all_channel_{timestamp}.csv")
-        with open(runtime_csv_file, "w") as f:
-                f.write("channel,elapsed_time\n")
+        # runtime_csv_file = os.path.join(base_path, f"runtime_all_channel_{timestamp}.csv")
+        # with open(runtime_csv_file, "w") as f:
+        #         f.write("channel,elapsed_time\n")
 
         # run sandyaq to take data
         # the executable is in: /home/daqtest/DAQ/SandyAQ/sandyaq/build
@@ -382,41 +416,49 @@ class SingleCalibration:
             
             start_timestamp = datetime.datetime.now()
 
-            e = threading.Event()
-            exit_current_loop = False
-
             print(f"Taking data with config file: {tmp_config_file}")
-
-            # start a thread to run the executable
-            t = threading.Thread(target=self._run_executable, args=(e, tmp_config_file, number_of_events, base_path, data_file_name))
             
-            t.start()
-            t.join(timeout=data_taking_settings["timeout"])
+            if set_timeout:
+                e = threading.Event()
+                exit_current_loop = False
 
-            if t.is_alive():
-                e.set()
-                t.join()
-                print("Timeout occurred and process terminated")
-
-                # remove the corrupted data file
-                files_to_be_removed = glob.glob(os.path.join(base_path, f"{data_file_name}*.bin"))
-                for _file in files_to_be_removed:
-                    print(f"Removing file: {_file}")
-                    os.remove(_file)
-
-                exit_current_loop = True
+                # start a thread to run the executable
+                t = threading.Thread(target=self._run_executable, args=(e, tmp_config_file, number_of_events, base_path, data_file_name))
                 
-            else:
-                print("Thread finished successfully")
+                t.start()
+                t.join(timeout=data_taking_settings["timeout"])
+
+                if t.is_alive():
+                    e.set()
+                    t.join()
+                    print("Timeout occurred and process terminated")
+
+                    # remove the corrupted data file
+                    files_to_be_removed = glob.glob(os.path.join(base_path, f"{data_file_name}*.bin"))
+                    for _file in files_to_be_removed:
+                        print(f"Removing file: {_file}")
+                        os.remove(_file)
+
+                    exit_current_loop = True
+                    
+                else:
+                    print("Thread finished successfully")
+                
+                # Thread can still be alive at this point. Do another join without a timeout 
+                # to verify thread shutdown.
+                # https://stackoverflow.com/questions/34562473/most-pythonic-way-to-kill-a-thread-after-some-period-of-time
+                t.join()
+
+                if exit_current_loop:
+                    continue
             
-            # Thread can still be alive at this point. Do another join without a timeout 
-            # to verify thread shutdown.
-            # https://stackoverflow.com/questions/34562473/most-pythonic-way-to-kill-a-thread-after-some-period-of-time
-            t.join()
+            else:
 
-            if exit_current_loop:
-                continue
-
+                try:
+                    print(f"Taking data with config file: {tmp_config_file}")
+                    os.system(f"{self.run_sandyaq_command} -c {tmp_config_file} -n {number_of_events} -d {base_path} -f {data_file_name}")
+                except Exception as e:
+                    print(f"Error running sandyaq: {e}")
         
             end_timestamp = datetime.datetime.now()
 
@@ -437,8 +479,8 @@ class SingleCalibration:
             with open(meta_file_name, "w") as f:
                 json.dump(data_taking_settings, f, indent=4)
 
-            with open(runtime_csv_file, "a") as f:
-                f.write(f"{channel},{(end_timestamp - start_timestamp).total_seconds()}\n")
+            # with open(runtime_csv_file, "a") as f:
+            #     f.write(f"{channel},{(end_timestamp - start_timestamp).total_seconds()}\n")
                 
         return 
     

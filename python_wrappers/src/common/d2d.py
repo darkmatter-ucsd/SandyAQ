@@ -17,7 +17,7 @@ import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
 from common.logger import setup_logger
-import data_processing.run_info as run_info
+import common.run_info as run_info
 
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 
@@ -56,6 +56,7 @@ class data():
         
         if not dry:
             logger.info(f"Before cut: {len(self)}")
+            
         new_dict = {}
         for column in self.__dict__.keys():
             if inplace:
@@ -71,7 +72,7 @@ class data():
         else:
             return data(new_dict)
         
-    def get_run_info(self, row: int) -> run_info.RunInfo:
+    def get_row_info(self, row: int) -> run_info.RunInfo:
         """
         Return run_info.RunInfo from the row of the df from 
         d2d.data class with a given index or row_id.
@@ -97,4 +98,9 @@ class data():
         # so just picked a random one
         first = next(iter(self.__dict__.values()))
         return len(first)
+    
+    def copy(self):
+        df = self.get_df().copy()
+        return data(df)
+        
 

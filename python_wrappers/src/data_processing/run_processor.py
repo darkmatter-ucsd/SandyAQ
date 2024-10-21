@@ -12,7 +12,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
-import data_processing.run_info as run_info
+import common.run_info as run_info
 import data_processing.event_processor as event_processor
 import common.config_reader as common_config_reader
 import common.metadata_handler as metadata_handler
@@ -52,7 +52,7 @@ class RunProcessor:
                                 "md_full_path":350,
                                 "run_tag":100,
                                 "comment":350,
-                                "hist_count":800}
+                                "area_hist_count_Vns":800}
         
         self.info = run_info.RunInfo()
         
@@ -104,7 +104,7 @@ class RunProcessor:
         self.info.channel = self.metadata.channel
         
         self.info.runtime_s = self.metadata.runtime_s
-        self.info.voltage_preamp1_V = self.metadata.voltage_preamp1_V
+        self.info.voltage_preamp1_V = float(self.metadata.voltage_preamp1_V)
         self.info.temperature_K = self.metadata.temperature_K
         
         self.info.number_of_events = self.metadata.number_of_events
@@ -128,14 +128,14 @@ class RunProcessor:
                 self.info.baseline_n_samples_avg = self.EventProcessor.baseline_n_samples_avg
                 self.info.n_channels = self.EventProcessor.n_channels
                 
-                areas = self.EventProcessor.areas
+                areas_Vns = self.EventProcessor.areas_Vns
                 
-                self.info.hist_count,self.info.bin_edges = np.histogram(areas,bins=self.hist_n_bins,range=self.hist_range)
-                self.info.hist_count = self.info.hist_count
-                self.info.bin_edges = self.info.bin_edges
+                self.info.area_hist_count_Vns,self.info.area_bin_edges_Vns = np.histogram(areas_Vns,bins=self.hist_n_bins,range=self.hist_range)
+                self.info.area_hist_count_Vns = self.info.area_hist_count_Vns
+                self.info.area_bin_edges_Vns = self.info.area_bin_edges_Vns
                 
-                self.info.baseline_std = self.EventProcessor.baseline_std
-                self.info.baseline_mean = self.EventProcessor.baseline_mean
+                self.info.baseline_std_V = self.EventProcessor.baseline_std_V
+                self.info.baseline_mean_V = self.EventProcessor.baseline_mean_V
                 self.info.n_processed_events = self.EventProcessor.n_processed_events
                 self.info.start_index = self.EventProcessor.start_index
                 
@@ -256,8 +256,8 @@ class RunProcessor:
                 #               append=True, format='table')
                 
                 precision = 5
-                new_df['hist_count'] = new_df['hist_count'].apply(lambda x: json.dumps(np.around(x, precision).tolist()))
-                new_df['bin_edges'] = new_df['bin_edges'].apply(lambda x: json.dumps(np.around(x, precision).tolist()))
+                new_df['area_hist_count_Vns'] = new_df['area_hist_count_Vns'].apply(lambda x: json.dumps(np.around(x, precision).tolist()))
+                new_df['area_bin_edges_Vns'] = new_df['area_bin_edges_Vns'].apply(lambda x: json.dumps(np.around(x, precision).tolist()))
 
                 
                 hdf = pd.HDFStore(self.output_file, mode='a')
@@ -278,7 +278,7 @@ class RunProcessor:
             # Sort the DataFrame by date and assign run_id
             run_info_df.sort_values("date_time", inplace=True)
             run_info_df.reset_index(drop=True, inplace=True)
-            run_info_df["run_id"] = run_info_df.index + 1
+            run_info_df["run_id"] = run_info_df.index + int(1)
 
             # Save the updated run_info DataFrame to self.output_file
             run_info_df.to_hdf(self.output_file, 

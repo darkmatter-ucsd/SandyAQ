@@ -8,7 +8,7 @@ import sandpro
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
-import data_processing.run_info as run_info
+import common.run_info as run_info
 import data_processing.waveform_processor as waveform_processor
 import common.config_reader as common_config_reader
 from common.logger import setup_logger
@@ -54,10 +54,12 @@ class EventProcessor:
         self.baseline_n_samples = int(self.config.get("EVENT_PROCESSOR_SETTINGS", "n_baseline_samples")) #index to truncate the events before
         self.baseline_n_samples_avg = int(self.config.get("EVENT_PROCESSOR_SETTINGS", "n_baseline_samples_avg")) #index to truncate the events before
         
+        # get integral window to compute area
         tmp = self.config.get("EVENT_PROCESSOR_SETTINGS", "integral_window_for_area")
         tmp = tmp.split(' ')
         self.integral_window = (float(tmp[0]),float(tmp[1]))
-        
+                
+        # get number of channels per events
         processing_mode = self.config.get("EVENT_PROCESSOR_SETTINGS", "mode")
         if processing_mode == "single_channel":
             self.n_channels = 1
@@ -75,6 +77,15 @@ class EventProcessor:
                                      "channels, i.e. betweem 0 and 24")
                 else:
                     self.n_channels = processing_mode
+        
+        self.data_taking_config = self.common_cfg_reader.get_data_taking_config()
+        
+        DAQ = self.data_taking_config.get("DAQ_MODULE", "DAQ") # which DAQ board
+        
+        self.n_bits = int(self.data_taking_config.get(DAQ, "n_bits"))
+        range = float(self.data_taking_config.get(DAQ, "range"))
+        
+        self.volt_per_adc = range/float(2**self.n_bits)
                     
         self.waveform = None
         
@@ -104,7 +115,7 @@ class EventProcessor:
         try:
             waveform = processor.get_rawdata_numpy(n_evts=self.number_of_events-1,
                                         file=self.bin_full_path, # specific .bin file
-                                        bit_of_daq=14,
+                                        bit_of_daq=self.n_bits,
                                         headersize=4,inversion=False)
         except ValueError as e:
             self.failure_flag = True
@@ -138,46 +149,7 @@ class EventProcessor:
         #                                     headersize=4,inversion=False)
         # data_processed = waveform["data_per_channel"][spd.start_index:spd.end_index,0,:]
         # mask = np.random.rand(spd.n_processed_events) < 0.05
-    
-    def get_randomly_selected_WF(self, n_selection: int):
-        """_summary_
-
-        Args:
-            n_selection (int): number of waveforms to be select
-
-        Returns:
-            if waveforms are saved
-            tuple(array, array): randomly_selected_raw_WF, randomly_selected_filtered_WF
-        """
         
-        if self.waveform != None:
-            data_processed = self.waveform["data_per_channel"][self.start_index:self.end_index,0,:]
-            
-            # draw random row
-            # 1. create array of indexes
-            # self.n_processed_events should be assigned if self.waveform is not None
-            all_rows_id = np.arange(self.n_processed_events)
-            # 2. draw from the indexes, which will be the index of the row
-            selected_rows_id = np.random.choice(all_rows_id, size=n_selection, replace=False)
-            # this is done, instead of using np.random.randint
-            # is because np.random.randint do not have replace option
-            
-            randomly_selected_raw_WF = data_processed[selected_rows_id,:]
-            randomly_selected_filtered_WF =  self.wfp.filtered_wfs[selected_rows_id,:]
-            
-            return randomly_selected_raw_WF, randomly_selected_filtered_WF
-        
-        else:
-            logger.warning("self.waveform is None. \n" + \
-                            "In case you ran: \n" + \
-                            "this_class.process_all_events(),\n" + \
-                            "you should have run: \n" + \
-                            "this_class.process_all_events(set_waveform = True) \n" + \
-                            "instead.")
-            return
-                   
-        
-          
     def process_all_events(self, set_waveform = False) -> None:
         """_summary_
 
@@ -197,21 +169,28 @@ class EventProcessor:
             
             if waveform != None:
                 
-                wfp = waveform_processor.WFProcessor(self.file_dir, volt_per_adc=2/2**14)
+                wfp = waveform_processor.WFProcessor(self.file_dir, 
+                                                     length_per_event = self.record_length_sample,
+                                                     volt_per_adc=self.volt_per_adc)
                 wfp.set_data(waveform["data_per_channel"][self.start_index:self.end_index,0], in_adc = False)
                 wfp.process_wfs()
                 
-                self.baseline_std = np.mean(wfp.baseline_rms)
-                self.baseline_mean = np.mean(wfp.baseline)
-                self.n_processed_events = int(len(wfp.baseline_rms))
+                self.baseline_std_V = np.mean(wfp.baseline_std_V)
+                self.baseline_mean_V = np.mean(wfp.baseline_mean_V)
+                self.n_processed_events = int(len(wfp.baseline_std_V))
                 self.start_index = int(self.start_index)
                 
-                self.areas = wfp.get_area(sum_window=self.integral_window)
-                self.heights = wfp.get_height(search_window=self.integral_window)
+                self.areas_Vns = wfp.get_area(sum_window=self.integral_window)
+                self.heights_V = wfp.get_height(search_window=self.integral_window)
+
+                self.processed_event_id = np.arange(0, self.n_processed_events)
                 
                 if set_waveform:
                     self.waveform = waveform
                     self.wfp = wfp
+                else:
+                    self.waveform = None
+                    self.wfp = None
                     
             else:
                 self.failure_flag = True
@@ -225,4 +204,41 @@ class EventProcessor:
         return
             
                 
+    def get_randomly_selected_WF(self, n_selection: int):
+        """_summary_
+
+        Args:
+            n_selection (int): number of waveforms to be select
+
+        Returns:
+            if waveforms are saved
+            tuple(array, array): randomly_selected_raw_WF_V, randomly_selected_filtered_WF
+        """
         
+        if self.waveform != None:
+            data_processed = self.waveform["data_per_channel"][self.start_index:self.end_index,0,:]
+            
+            # draw random row
+            # 1. create array of indexes
+            # self.n_processed_events should be assigned if self.waveform is not None
+            all_rows_id = np.arange(self.n_processed_events)
+            # 2. draw from the indexes, which will be the index of the row
+            selected_rows_id = np.random.choice(all_rows_id, size=n_selection, replace=False)
+            # this is done, instead of using np.random.randint
+            # is because np.random.randint do not have replace option
+            
+            randomly_selected_raw_WF_V = data_processed[selected_rows_id,:]
+            randomly_selected_filtered_WF =  self.wfp.filtered_wfs[selected_rows_id,:]
+            
+            return randomly_selected_raw_WF_V, randomly_selected_filtered_WF
+        
+        else:
+            logger.warning("self.waveform is None. \n" + \
+                            "In case you ran: \n" + \
+                            "this_class.process_all_events(),\n" + \
+                            "you should have run: \n" + \
+                            "this_class.process_all_events(set_waveform = True) \n" + \
+                            "instead.")
+            return
+                   
+    

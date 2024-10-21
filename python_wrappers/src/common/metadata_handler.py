@@ -17,7 +17,7 @@ import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
 from common.logger import setup_logger
-import data_processing.run_info as run_info
+import common.run_info as run_info
 
 # logger = setup_logger(__name__)
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])

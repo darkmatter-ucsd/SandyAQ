@@ -16,7 +16,7 @@ from common.logger import setup_logger
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 
 class FitSPE:  
-    def __init__(self, bias_voltage, n_hist, bin_edges):
+    def __init__(self, bias_voltage, area_hist_count_Vns, area_bin_edges_Vns):
 
         self.amp_list = []
         self.mu_list = []
@@ -26,8 +26,8 @@ class FitSPE:
         self.mu_err_list = []
         
         self.bias_voltage = bias_voltage
-        self.n_hist = n_hist
-        self.bin_edges = bin_edges
+        self.area_hist_count_Vns = area_hist_count_Vns
+        self.area_bin_edges_Vns = area_bin_edges_Vns
         # self.plot = plot
         # self.show_plot = show_plot
         # self.save_plot = save_plot
@@ -44,7 +44,8 @@ class FitSPE:
         
         # checked by eyes that 0.03 is good, but can do a more serious cut
         self.good_fit_threshold = 0.03
-        self.distance_rough_guess = {46:0.25, 
+        self.distance_rough_guess = {45:0.22,
+                                     46:0.25, 
                                      47:0.3, 
                                      48:0.5, 
                                      49:0.5, 
@@ -64,11 +65,11 @@ class FitSPE:
             
     def guess_peaks(self, distance_rough_guess = 0.5):
 
-        self.bin_centers = self.bin_edges[:-1] + np.diff(self.bin_edges)/2
+        self.bin_centers = self.area_bin_edges_Vns[:-1] + np.diff(self.area_bin_edges_Vns)/2
         bin_density = 10/len(self.bin_centers)
         # distance_rough_guess = 0.5 # distance between peaks in mV*ns
 
-        self.peaks, _ = find_peaks(self.n_hist, height=5, 
+        self.peaks, _ = find_peaks(self.area_hist_count_Vns, height=5, 
                               distance=distance_rough_guess/bin_density)
         self.n_peaks = len(self.peaks)
         return
@@ -82,7 +83,7 @@ class FitSPE:
         PE_rough_position = self.bin_centers[peaks] # unit: V*ns
         # PE_rough_half_width = np.median(np.diff(PE_rough_position))/2
         PE_rough_half_width = np.min(np.diff(PE_rough_position))
-        PE_rough_amplitude = self.n_hist[peaks]
+        PE_rough_amplitude = self.area_hist_count_Vns[peaks]
         PE_half_width_index = int(np.median(np.diff(peaks))/2) # PE width in index
         
         self.PE_rough_position = PE_rough_position
@@ -94,8 +95,8 @@ class FitSPE:
         #     plt.xlabel("Area [V*ns]")
         #     plt.ylabel("Counts")
         #     plt.title("Area Histogram")
-        #     plt.plot(self.bin_centers, self.n_hist, color='black', label='Data',zorder=0)
-        #     plt.plot(self.bin_centers[peaks], self.n_hist[peaks], "x", label='Identified Peaks')
+        #     plt.plot(self.bin_centers, self.area_hist_count_Vns, color='black', label='Data',zorder=0)
+        #     plt.plot(self.bin_centers[peaks], self.area_hist_count_Vns[peaks], "x", label='Identified Peaks')
         
         # Executing curve_fit on noisy data 
         for i, peak in enumerate(peaks[0:8]):
@@ -122,7 +123,7 @@ class FitSPE:
             try:
                 (amp,mu,sig), pcov = curve_fit(self.gaussian_func, 
                                             self.bin_centers[min_x:max_x], 
-                                            self.n_hist[min_x:max_x], 
+                                            self.area_hist_count_Vns[min_x:max_x], 
                                             p0=[PE_rough_amplitude[i], 
                                                 PE_rough_position[i], 
                                                 PE_rough_half_width])
@@ -294,8 +295,8 @@ class FitSPE:
             self.spe_position = mean
             self.spe_position_error = sem
         
-            self.gain = self.spe_position*1e-12/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
-            self.gain_error = self.spe_position_error*1e-12/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
+            self.gain = self.spe_position*1e-9/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
+            self.gain_error = self.spe_position_error*1e-9/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
         
         # print(f"Mean, error: {self.spe_position},{self.spe_position_error}")
         # print(f"Gain: {self.gain}")

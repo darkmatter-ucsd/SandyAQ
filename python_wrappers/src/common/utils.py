@@ -58,7 +58,7 @@ def extract_channel_meta_data(meta_data_path):
 
 # v_extract_channel_meta_data = np.vectorize(extract_channel_meta_data, otypes=[np.ndarray])
 
-def adc_to_mv(adc, DCOFFSET=+50, vpp=2.0, bit_of_daq=14): #DC offset should be +50 instead of 40, legacy
+def adc_to_mv(adc, DCOFFSET=+50, vpp=2.0, bit_of_daq=14): 
     #DC OFFSET = +40: -0.2 - 1.8
     #DC OFFSET = +50: 0.0 - 2.0
     #DC OFFSET = -50: -2 - 0.0
@@ -75,9 +75,9 @@ def mv_to_adc(mv, DCOFFSET=+50, vpp=2.0, bit_of_daq=14):
     # voltage_per_adc = vpp / (2**bit_of_daq-1)
     return (mv/1000 - start_voltage) / vpp * (2**bit_of_daq-1)
 
-v_mv_to_adc = np.vectorize(mv_to_adc, otypes=[np.ndarray])
+v_mv_to_adc = np.vectorize(mv_to_adc, excluded=['DCOFFSET', 'vpp', 'bit_of_daq'],otypes=[np.ndarray])
 
-def V_to_adc(V, DCOFFSET=+40, vpp=2.0, bit_of_daq=14):
+def V_to_adc(V, DCOFFSET=+50, vpp=2.0, bit_of_daq=14):
     start_voltage = (DCOFFSET/50) -1.0
     # end_voltage = start_voltage + vpp
     # voltage_per_adc = vpp / (2**bit_of_daq-1)

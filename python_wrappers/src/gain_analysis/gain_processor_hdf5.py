@@ -14,8 +14,8 @@ import sandpro
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
-# from data_processing.run_info import RunInfo
-import data_processing.run_info as run_info
+# from common.run_info import RunInfo
+import common.run_info as run_info
 # import data_processing.event_processor as event_processor
 import gain_analysis.fit_spe as fit_spe
 import gain_analysis.gain_processor as gain_processor
@@ -51,8 +51,8 @@ class GainProcessor:
             df = pd.read_hdf(run_list_path, 
                             key=self.hdf5_key,
                             mode='r')
-            df['hist_count'] = df['hist_count'].apply(json.loads).apply(np.array)
-            df['bin_edges'] = df['bin_edges'].apply(json.loads).apply(np.array)
+            df['area_hist_count_Vns'] = df['area_hist_count_Vns'].apply(json.loads).apply(np.array)
+            df['area_bin_edges_Vns'] = df['area_bin_edges_Vns'].apply(json.loads).apply(np.array)
             
             all_runs = d2d.data(df)
             
@@ -88,15 +88,15 @@ class GainProcessor:
     
     def process_single_run(self, single_run_info: run_info.RunInfo):
         
-        # self.hist_count,self.bin_edges = df.hist_count,df.bin_edges
+        # self.area_hist_count_Vns,self.area_bin_edges_Vns = df.area_hist_count_Vns,df.area_bin_edges_Vns
 
         # voltage_preamp1_V helps to predetermine the peak distance
         spe_fit = fit_spe.FitSPE(single_run_info.voltage_preamp1_V, 
-                                single_run_info.hist_count, 
-                                single_run_info.bin_edges)
+                                single_run_info.area_hist_count_Vns, 
+                                single_run_info.area_bin_edges_Vns)
         
         # fig, ax = plt.subplots()
-        # ax.plot(bin_edges[:-1],hist_count)
+        # ax.plot(area_bin_edges_Vns[:-1],area_hist_count_Vns)
         # ax.scatter(spe_fit.PE_rough_position,spe_fit.PE_rough_amplitude)
         # for i in spe_fit.mu_list:
         #     ax.axvline(i,c = "tab:green")
@@ -127,7 +127,7 @@ class GainProcessor:
         
         for i in range(len(all_runs_d2d)):
             # convert one row into run_info
-            single_run_info = all_runs_d2d.get_run_info(i)
+            single_run_info = all_runs_d2d.get_row_info(i)
             logger.info(f"Processing file: {single_run_info.bin_full_path}")
             
             # GainProcessor = gain_processor.GainProcessor()
@@ -144,8 +144,8 @@ class GainProcessor:
         all_runs_d2d.__setattr__("gain", np.array(gain_list))
         all_runs_d2d.__setattr__("gain_err", np.array(gain_err_list))
         
-        delattr(all_runs_d2d, "hist_count")
-        delattr(all_runs_d2d, "bin_edges")
+        delattr(all_runs_d2d, "area_hist_count_Vns")
+        delattr(all_runs_d2d, "area_bin_edges_Vns")
         
         new_df = all_runs_d2d.get_df()
         new_df.to_csv(f"{self.output_file_path}", index=False, quoting=csv.QUOTE_NONNUMERIC)

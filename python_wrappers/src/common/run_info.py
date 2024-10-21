@@ -8,9 +8,12 @@ class RunInfo:
     def __init__(self):
         '''
         Dataclass to store the information of a single data file for run_processor.py.
-        All attributes in this class corresponse to the columns of the output csv file
+        All attributes in this class corresponse to the columns of the output csv/hdf5 file
         If the number of columns is changed, run_processor.py will reprocess all runs 
         that were being processed.
+        
+        For other classes inheriting this class can add more attributes, such as fast_processor
+        or metadata_handler
         '''
         self.bin_full_path: str = ""
         self.md_full_path: str = ""
@@ -36,15 +39,15 @@ class RunInfo:
         self.record_length_sample: int = np.nan
         self.baseline_n_samples: int = np.nan
         self.baseline_n_samples_avg: int = np.nan
-        self.baseline_std: float = np.nan
-        self.baseline_mean: float = np.nan
+        self.baseline_std_V: float = np.nan
+        self.baseline_mean_V: float = np.nan
         
-        self.hist_count: float = np.nan
-        self.bin_edges: float = np.nan
+        self.area_hist_count_Vns: float = np.nan
+        self.area_bin_edges_Vns: float = np.nan
         
         # run_id is assigned after processing all data and sorted by date_time
         # see run_processor.process_runs()
-        self.run_id: int = np.nan 
+        self.run_id: int = int(1)
       
     def set_run_info_from_dict(self, run_info: dict):
         for column in self.__dict__.keys():

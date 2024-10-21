@@ -14,8 +14,8 @@ import sandpro
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
-# from data_processing.run_info import RunInfo
-import data_processing.run_info as run_info
+# from common.run_info import RunInfo
+import common.run_info as run_info
 import data_processing.event_processor as event_processor
 import gain_analysis.fit_spe as fit_spe
 import common.d2d as d2d
@@ -99,17 +99,17 @@ class GainProcessor:
             gain_err = np.nan
         else:
             self.EventProcessor = EventProcessor
-            self.areas = EventProcessor.areas
-            self.heights = EventProcessor.heights
-            self.hist_count,self.bin_edges = np.histogram(self.areas,bins=self.hist_n_bins,range=self.hist_range)
+            self.areas_Vns = EventProcessor.areas_Vns
+            self.heights_V = EventProcessor.heights_V
+            self.area_hist_count_Vns,self.area_bin_edges_Vns = np.histogram(self.areas_Vns,bins=self.hist_n_bins,range=self.hist_range)
 
             # voltage_preamp1_V helps to predetermine the peak distance
             spe_fit = fit_spe.FitSPE(voltage_preamp1_V, 
-                                    self.hist_count, 
-                                    self.bin_edges)
+                                    self.area_hist_count_Vns, 
+                                    self.area_bin_edges_Vns)
             
             # fig, ax = plt.subplots()
-            # ax.plot(bin_edges[:-1],hist_count)
+            # ax.plot(area_bin_edges_Vns[:-1],area_hist_count_Vns)
             # ax.scatter(spe_fit.PE_rough_position,spe_fit.PE_rough_amplitude)
             # for i in spe_fit.mu_list:
             #     ax.axvline(i,c = "tab:green")
@@ -140,7 +140,7 @@ class GainProcessor:
         
         for i in range(len(all_runs_d2d)):
             # convert one row into run_info
-            single_run_info = all_runs_d2d.get_run_info(i)
+            single_run_info = all_runs_d2d.get_row_info(i)
             logger.info(f"Processing file: {single_run_info.bin_full_path}")
             
             gain, gain_err = self.process_single_run(single_run_info.bin_full_path,

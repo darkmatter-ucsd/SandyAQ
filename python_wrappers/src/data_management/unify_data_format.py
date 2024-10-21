@@ -45,10 +45,10 @@ def get_meta_data_from_file_name(data_file):
         print(f"File name {data_file} does not match the pattern")
         return None
 
-v_meta_data_from_file_name = np.vectorize(get_meta_data_from_file_name)
+v_meta_data_from_file_name = np.vectorize(get_meta_data_from_file_name, otypes=[np.ndarray])
 
-v_basename = np.vectorize(os.path.basename)
-v_dirname = np.vectorize(os.path.dirname)
+v_basename = np.vectorize(os.path.basename, otypes=[np.ndarray])
+v_dirname = np.vectorize(os.path.dirname, otypes=[np.ndarray])
 
 ### step 1: create new meta data file (to be replaced in step 2)
 ### check if everything make sense in the new meta data
