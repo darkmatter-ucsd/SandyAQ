@@ -21,28 +21,37 @@ class WFProcessor(object):
         self.polarity = polarity
         self.wfs = None
 
-    def set_data(self,data, in_adc = True):
+    def set_data(self, data, unit = "mV"):
         """
         Load data from a numpy array
         Supposed to be in ADC counts
+        
+        :param data: data array
+        :param unit: unit of the data. Value is either "mV", "V", or "ADC". Default "mV".
         """
+        
         self.wfs = data
         self.n_event = len(self.wfs)
         self.time = np.arange(0, self.length_per_event, 1) * 4
-        if in_adc:
+        if unit=="ADC":
             self.raw_data_unit = "ADC"
-        else:
+        elif unit=="V":
             self.raw_data_unit = "V"
+        elif unit=="mV":
+            self.raw_data_unit = "mV"
+            self.wfs /= 1000
+        else:
+            raise ValueError("The parameter 'unit' is either 'ADC', 'V' or 'mV'. ")
 
-    def process_wfs(self,baseline_front=(0.1,0.3),baseline_back=(0.7,0.9),cutoff=10e6,fs=250e6):
+    def process_wfs(self,baseline_front=(0.1,0.3),cutoff=10e6,fs=250e6):
         baseline_start_f = int(self.length_per_event * baseline_front[0])
         baseline_end_f = int(self.length_per_event * baseline_front[1])
-        baseline_start_b = int(self.length_per_event * baseline_back[0])
-        baseline_end_b = int(self.length_per_event * baseline_back[1])
+        # baseline_start_b = int(self.length_per_event * baseline_back[0])
+        # baseline_end_b = int(self.length_per_event * baseline_back[1])
 
         # baseline is calculated with raw waveform
         # unit: same as raw waveform
-        self.baseline_mean_V = (np.mean(self.wfs[:,baseline_start_f:baseline_end_f],axis=1) + np.mean(self.wfs[:,baseline_start_b:baseline_end_b],axis=1))/2
+        self.baseline_mean_V = np.mean(self.wfs[:,baseline_start_f:baseline_end_f],axis=1)
         self.baseline_std_V = np.std(self.wfs[:,baseline_start_f:baseline_end_f],axis=1)
         
         baseline = self.baseline_mean_V.repeat(self.length_per_event).reshape(self.n_event,self.length_per_event)

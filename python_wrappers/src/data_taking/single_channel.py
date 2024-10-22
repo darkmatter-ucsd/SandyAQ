@@ -288,7 +288,7 @@ class SingleChannel_DataTaking:
                 start_index, end_index = 0, 119
             
             wfp = waveform_processor.WFProcessor(data_folder, volt_per_adc=2/2**14)
-            wfp.set_data(data["data_per_channel"][start_index:end_index,0], in_adc = False)
+            wfp.set_data(data["data_per_channel"][start_index:end_index,0], unit="mV")
             wfp.process_wfs()
             
             baseline_std_V = np.mean(wfp.baseline_std_V)
