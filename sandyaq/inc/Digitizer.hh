@@ -26,6 +26,7 @@ class Digitizer {
         
         //Needs to be set per digitizer
         virtual int ProgramDigitizers();
+        virtual int SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards);
         virtual void Quit();
 
         //Map for Trigger Modes
@@ -37,10 +38,13 @@ class Digitizer {
 
         int m_iHandles[MAX_BOARDS];
         int m_bOpen[MAX_BOARDS];
+        std::vector<int> m_iBoardIndices;
 
     public:
         CommonConfig_t m_CommonConfig;
         int m_iNBoards = 0;
+
+        std::string m_BoardType;
 
         //Board settings
         uint32_t m_iNChannels[MAX_BOARDS];
@@ -49,7 +53,7 @@ class Digitizer {
         std::vector<std::string> m_sLinkTypes;
         std::vector<std::vector<uint32_t>> m_iLinkValues;
         std::vector<std::vector<uint32_t>> m_iOpenChannels;
-        uint32_t m_iCoincidences[MAX_BOARDS];
+        // uint32_t m_iCoincidences[MAX_BOARDS];
         // uint32_t m_iPulsePolarity[MAX_BOARDS];
         uint32_t m_iETTT[MAX_BOARDS];
         std::vector<CAEN_DGTZ_TriggerMode_t> m_iExternalTriggerEnabled;

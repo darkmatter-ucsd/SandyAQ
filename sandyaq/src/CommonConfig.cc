@@ -8,7 +8,7 @@ int ParseCommonConfig(std::string& sConfigFile, CommonConfig_t& Config){
         Config.sBoardTypes = r.GetVector<std::string>("COMMON", "BOARD_TYPES");
     }
     Config.sGNUPlotPath = r.Get<std::string>("COMMON", "GNUPLOT_PATH");
-    Config.uiRecordLength = r.Get<uint32_t>("COMMON", "RECORD_LENGTH");
+    // Config.uiRecordLength = r.Get<uint32_t>("COMMON", "RECORD_LENGTH");
     Config.uiNumEventsBLT = r.Get<uint32_t>("COMMON", "MAX_NUM_EVENTS_BLT");
 
     Config.SyncMode = r.Get<std::string>("COMMON", "SYNC_MODE");

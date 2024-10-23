@@ -1,10 +1,10 @@
-#include "V1725.hh"
+#include "V1720.hh"
 
-V1725::~V1725() {
+V1720::~V1720() {
     Quit();
 }
 
-int V1725::ReadX725SpecificParams(){
+int V1720::ReadX725SpecificParams(){
     inih::INIReader r{ m_sConfigFile };
     int ret = 0;
 
@@ -18,7 +18,7 @@ int V1725::ReadX725SpecificParams(){
     return ret;
 }
 
-int V1725::ProgramDigitizers() {
+int V1720::ProgramDigitizers() {
     int ret = 0;
     for (int i = 0; i < m_iNBoards; i++) {
         if (m_sFirmwares[i] == "WAVEFORM") {
@@ -42,7 +42,7 @@ int V1725::ProgramDigitizers() {
     return ret;
 }
 
-void V1725::Quit() {
+void V1720::Quit() {
     for (int i = 0; i < m_iNBoards; i++) {
         CAEN_DGTZ_CloseDigitizer(m_iHandles[i]);
     }
@@ -50,7 +50,7 @@ void V1725::Quit() {
 
 
 //Default Wavedump
-int V1725::ProgramDefault(int BoardNum) {
+int V1720::ProgramDefault(int BoardNum) {
     int ret = 0;
     int handle = m_iHandles[BoardNum];
     CAEN_DGTZ_BoardInfo_t BoardInfo = m_BoardInfo[BoardNum];
@@ -187,11 +187,11 @@ int V1725::ProgramDefault(int BoardNum) {
     return ret;
 };
 
-int V1725::ProgramDAW(int BoardNum) {
+int V1720::ProgramDAW(int BoardNum) {
 
 };
 
-int V1725::SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards) {
+int V1720::SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards) {
         //This one write register is pretty complicated, let's summarize it:
     //  1) Enables LVDS couple 0-3 as input
     //  2) Enables LVDS couple 4-7 as output

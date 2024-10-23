@@ -6,6 +6,8 @@ endif()
 
 project(SandyAQ)
 
+find_package(OpenMP)
+
 file(GLOB sources ${PROJECT_SOURCE_DIR}/src/*.cc)
 file(GLOB headers ${PROJECT_SOURCE_DIR}/inc/*.hh)
 
@@ -20,6 +22,7 @@ target_link_libraries(sandyaq m)
 # target_link_libraries(zle_exe chrono)
 target_link_libraries(sandyaq CAENDigitizer)
 target_link_libraries(sandyaq CAENComm)
+target_link_libraries(sandyaq OpenMP::OpenMP_CXX)
 # target_link_libraries(zle_exe CAENVMELib)
 
 add_custom_target(SandyAQ DEPENDS sandyaq)

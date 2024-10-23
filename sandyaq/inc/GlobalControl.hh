@@ -37,6 +37,18 @@ static int SetSyncMode(std::vector<Digitizer*> &Boards, CommonConfig_t* commonCo
     for (int bt = 0; bt<Boards.size(); bt++){
         Digitizer* boards = Boards[bt];
         for (int b = 0; b < boards->m_iNBoards; b++){
+            /*****************************************************************/
+            /* There are many configuration modes available. The first three */
+            /* modes are different ways to share a trigger as described in   */
+            /* the CAEN synchronization manual (not for the V1742). However, */
+            /* the synchronization mode that will most commonly be used is   */
+            /* the LVDS synchronization, as this method propagates the busy  */
+            /* signal across multiple boards. The LVDS synchronization is a  */
+            /* bit different for each digitizer, as such, they are           */
+            /* programmed according to the internal method SetLVDSSync() in  */
+            /* the Digitizer class.                                          */
+            /*****************************************************************/
+
             if (commonConfig->SyncMode == "COMMONT_EXTERNAL_TRIGGER_TRGIN_TRGOUT") {
                 std::cout <<"Programming synchronization mode for a common external trigger\n";
                 if ((b == 0)&&(bt == 0)) {// inhibit TRGIN on board 0 in order to avoid start of run with external triggers
@@ -115,6 +127,10 @@ static int SetSyncMode(std::vector<Digitizer*> &Boards, CommonConfig_t* commonCo
                 
                 // continue;
             }
+            else if (commonConfig->SyncMode == "LVDS_SYNC") {
+                int isMaster = ((bt==0)&&(b==0)) ? 1 : 0;
+                ret |= boards->SetLVDSSync(b, isMaster, totalBoardIndex, totalBoards);
+            }
             else{
                 return -1;
             }
@@ -143,31 +159,41 @@ static int ForceClockSync(int handle)
 static int StartRun(std::vector<Digitizer*> &Boards, CommonConfig_t* commonConfig) {
     int ret = 0;
     Digitizer* masterBoard = Boards[0];
-
-    if(commonConfig->SyncMode == "TRIGGER_ONE2ALL_EXTOR" || commonConfig->SyncMode == "COMMONT_EXTERNAL_TRIGGER_TRGIN_TRGOUT"){
-        // Start on first software trigger
-        if(commonConfig->StartMode == "START_SW_CONTROLLED"){
-            ret |= CAEN_DGTZ_SendSWtrigger(masterBoard->m_iHandles[0]);
-            PrintError(0, "Sending SW Trigger", "Digitizer", ret);
+    if (Boards.size()>1){
+        if(commonConfig->SyncMode == "TRIGGER_ONE2ALL_EXTOR" || commonConfig->SyncMode == "COMMONT_EXTERNAL_TRIGGER_TRGIN_TRGOUT"){
+            // Start on first software trigger
+            if(commonConfig->StartMode == "START_SW_CONTROLLED"){
+                ret |= CAEN_DGTZ_SendSWtrigger(masterBoard->m_iHandles[0]);
+                PrintError(0, "Sending SW Trigger", "Digitizer", ret);
+            }
+            if(commonConfig->SyncMode == "COMMONT_EXTERNAL_TRIGGER_TRGIN_TRGOUT"){
+                ret |= CAEN_DGTZ_WriteRegister(masterBoard->m_iHandles[0], ADDR_EXT_TRG_INHIBIT, 0); // Enable TRGIN of the first board
+                PrintError(0, "Writng", "Register[ADDR_EXT_TRG_INHIBIT]", ret);
+            }
+            return ret;
         }
-        if(commonConfig->SyncMode == "COMMONT_EXTERNAL_TRIGGER_TRGIN_TRGOUT"){
-            ret |= CAEN_DGTZ_WriteRegister(masterBoard->m_iHandles[0], ADDR_EXT_TRG_INHIBIT, 0); // Enable TRGIN of the first board
-            PrintError(0, "Writng", "Register[ADDR_EXT_TRG_INHIBIT]", ret);
+        else if(commonConfig->SyncMode == "INDIVIDUAL_TRIGGER_SIN_TRGOUT"){
+            if(commonConfig->StartMode == "START_SW_CONTROLLED"){
+                ret |= CAEN_DGTZ_WriteRegister(masterBoard->m_iHandles[0], ADDR_ACQUISITION_MODE, 0x4);
+                PrintError(0, "Writng", "Register[ADDR_ACQUISITION_MODE]", ret);
+            }
+            else{
+                ret |= CAEN_DGTZ_WriteRegister(masterBoard->m_iHandles[0], ADDR_ACQUISITION_MODE, 0x5);
+                PrintError(0, "Writng", "Register[ADDR_ACQUISITION_MODE]", ret);
+                
+                printf("Run starts/stops on the S-IN high/low level\n");
+            }
+            return ret;
         }
-        return ret;
-    }
-    if(commonConfig->SyncMode == "INDIVIDUAL_TRIGGER_SIN_TRGOUT"){
-        if(commonConfig->StartMode == "START_SW_CONTROLLED"){
-            ret |= CAEN_DGTZ_WriteRegister(masterBoard->m_iHandles[0], ADDR_ACQUISITION_MODE, 0x4);
-            PrintError(0, "Writng", "Register[ADDR_ACQUISITION_MODE]", ret);
+        else if (commonConfig->SyncMode == "LVDS_SYNC") {
+            CAEN_DGTZ_SWStartAcquisition(masterBoard->m_iHandles[0]);
         }
         else{
-            ret |= CAEN_DGTZ_WriteRegister(masterBoard->m_iHandles[0], ADDR_ACQUISITION_MODE, 0x5);
-            PrintError(0, "Writng", "Register[ADDR_ACQUISITION_MODE]", ret);
-            
-            printf("Run starts/stops on the S-IN high/low level\n");
+            return -1;
         }
-        return ret;
+    }
+    else{
+        CAEN_DGTZ_SWStartAcquisition(masterBoard->m_iHandles[0]);
     }
     return ret;
 };
@@ -178,28 +204,30 @@ int StopRun(std::vector<Digitizer*> &Boards, CommonConfig_t* commonConfig)
 {
     int ret = 0;
 
-    if (commonConfig->SyncMode == "COMMONT_EXTERNAL_TRIGGER_TRGIN_TRGOUT" || commonConfig->SyncMode == "TRIGGER_ONE2ALL_EXTOR") {
-        for (int bt = 0; bt<Boards.size(); bt++){
-            Digitizer* boards = Boards[bt];
-            for (int b = 0; b < boards->m_iNBoards; b++){
-                ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], ADDR_ACQUISITION_MODE, 0);
-                PrintError(b, "Writng", "Register[ADDR_ACQUISITION_MODE]", ret);
+    if (Boards.size()>1){
+        if (commonConfig->SyncMode == "COMMONT_EXTERNAL_TRIGGER_TRGIN_TRGOUT" || commonConfig->SyncMode == "TRIGGER_ONE2ALL_EXTOR") {
+            for (int bt = 0; bt<Boards.size(); bt++){
+                Digitizer* boards = Boards[bt];
+                for (int b = 0; b < boards->m_iNBoards; b++){
+                    ret |= CAEN_DGTZ_WriteRegister(boards->m_iHandles[b], ADDR_ACQUISITION_MODE, 0);
+                    PrintError(b, "Writng", "Register[ADDR_ACQUISITION_MODE]", ret);
 
+                }
             }
+            return ret;
         }
-        return ret;
+        else if (commonConfig->SyncMode == "INDIVIDUAL_TRIGGER_SIN_TRGOUT") {
+            Digitizer* masterBoard = Boards[0];
+            ret |= CAEN_DGTZ_WriteRegister(masterBoard->m_iHandles[0], ADDR_ACQUISITION_MODE, 0x0);
+            PrintError(0, "Writng", "Register[ADDR_ACQUISITION_MODE]", ret);
+            
+            return ret;
+        }
+        else{
+            return -1;
+        }
     }
-    if (commonConfig->SyncMode == "INDIVIDUAL_TRIGGER_SIN_TRGOUT") {
-        Digitizer* masterBoard = Boards[0];
-        ret |= CAEN_DGTZ_WriteRegister(masterBoard->m_iHandles[0], ADDR_ACQUISITION_MODE, 0x0);
-        PrintError(0, "Writng", "Register[ADDR_ACQUISITION_MODE]", ret);
-        
-        return ret;
-    }
-    else{
-        return -1;
-    }
-    // return ret;
+    return ret;
 }
 
 
