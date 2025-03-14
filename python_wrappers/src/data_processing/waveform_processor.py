@@ -43,7 +43,7 @@ class WFProcessor(object):
         else:
             raise ValueError("The parameter 'unit' is either 'ADC', 'V' or 'mV'. ")
 
-    def process_wfs(self,baseline_front=(0.1,0.3),cutoff=10e6,fs=250e6):
+    def process_wfs(self,baseline_front=(0.0,0.2),cutoff=10e6,fs=250e6):
         baseline_start_f = int(self.length_per_event * baseline_front[0])
         baseline_end_f = int(self.length_per_event * baseline_front[1])
         # baseline_start_b = int(self.length_per_event * baseline_back[0])
@@ -112,15 +112,97 @@ class WFProcessor(object):
         plt.xticks(np.arange(1800, 2200, step=20))
         plt.xlim(1800,2200)
 
-    def get_area(self,sum_window=(0.4,0.6)):
+    def get_event_start_end_idx(self, sum_window=(0.4,0.6), consecutive_samples=3, threshold_sig=5):
+        """
+        Return the start and end index of the sum window.
+        The start index is defined as the first index where the waveform (within sum_window) is above threshold for {n} consecutive_samples.
+        The end index is defined as the last index where the waveform  (within sum_window) is above threshold.
+
+        :param sum_window: tuple of two floats, the start and end of the sum window in percentage of the event length
+        :param consecutive_samples: number of consecutive samples above threshold to be considered as the start of the sum window
+        :param threshold_sig: number of standard deviations above the baseline to be considered as above threshold
+        """
+
+        if not self.polarity:
+            filtered_wfs = self.filtered_wfs * -1
+        else:
+            filtered_wfs = self.filtered_wfs
+
+        sum_start_idx = int(self.length_per_event * sum_window[0])
+        sum_end_idx = int(self.length_per_event * sum_window[1])
+
+        sum_start_idx_array = np.full(self.n_event, sum_start_idx)
+        sum_end_idx_array = np.full(self.n_event, sum_end_idx)
+
+        # find indexes of the waveform above threshold
+        threshold = self.baseline_mean_V + threshold_sig * self.baseline_std_V
+        threshold = threshold.repeat(self.length_per_event).reshape(self.n_event,self.length_per_event) # make the threshold the same array shape as the waveform
+        above_threshold_idx_event = np.where(filtered_wfs > threshold)[0]
+        above_threshold_idx_sample = np.where(filtered_wfs > threshold)[1]
+
+        # select indexes within sum_window
+        mask_index = (above_threshold_idx_sample >= sum_start_idx) & (above_threshold_idx_sample <= sum_end_idx)
+        above_threshold_idx_event = above_threshold_idx_event[mask_index]
+        above_threshold_idx_sample = above_threshold_idx_sample[mask_index]
+
+        # find the index of the first consecutive_samples above threshold
+        consecutive_sample_flag = 0
+        for event in range(self.n_event):
+
+            # sum_start_idx_array[event] = above_threshold_idx[0]
+            # sum_end_idx_array[event] = above_threshold_idx[-1]
+
+            if event in np.unique(above_threshold_idx_event):
+
+                above_threshold_idx = above_threshold_idx_sample[np.where(above_threshold_idx_event == event)]
+                above_threshold_idx_diff = np.diff(above_threshold_idx)
+
+                for i, diff in enumerate(above_threshold_idx_diff):
+                    if diff == 1:
+                        consecutive_sample_flag += 1
+                    else:
+                        consecutive_sample_flag = 0
+
+                    if consecutive_sample_flag == consecutive_samples:
+                        sum_start_idx = above_threshold_idx[i-(consecutive_samples-1)]
+                        sum_start_idx_array[event] = sum_start_idx
+                        break
+
+        return sum_start_idx_array, sum_end_idx_array
+    
+    def get_area(self,sum_window=(0.4,0.6), consecutive_samples=3, threshold_sig=5):
         """
         Return the area of the waveform in the sum window
         Unit: V * ns
         """
         sum_start = int(self.length_per_event * sum_window[0])
         sum_end = int(self.length_per_event * sum_window[1])
-        areas_Vsamples = np.sum(self.filtered_wfs[:,sum_start:sum_end],axis=1)
+
+        areas_Vsamples = np.sum(self.filtered_wfs[:,sum_start:sum_end], axis=1)
         self.areas_Vns = 4 * areas_Vsamples # now it becomes V * ns (for V1725, 1 sample = 4 ns)
+
+        if not self.polarity:
+            self.areas_Vns = -self.areas_Vns
+        return self.areas_Vns
+    
+    def get_area_rigor(self,sum_window=(0.4,0.6), consecutive_samples=3, threshold_sig=5):
+        """
+        Return the area of the waveform in the sum window
+        Unit: V * ns
+        """
+
+        self.sum_start_list, self.sum_end_list = self.get_event_start_end_idx(sum_window, 
+                                                          consecutive_samples=consecutive_samples, 
+                                                          threshold_sig=threshold_sig)
+        # sum_start = int(self.length_per_event * sum_window[0])
+        # sum_end = int(self.length_per_event * sum_window[1])
+
+        areas_Vsamples = np.zeros(self.n_event)
+
+        for i, (sum_start, sum_end) in enumerate(zip(self.sum_start_list, self.sum_end_list)):
+            areas_Vsamples[i] = np.sum(self.filtered_wfs[i,sum_start:sum_end])
+        self.areas_Vns = 4 * areas_Vsamples # now it becomes V * ns (for V1725, 1 sample = 4 ns)
+
         if not self.polarity:
             self.areas_Vns = -self.areas_Vns
         return self.areas_Vns

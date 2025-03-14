@@ -224,7 +224,10 @@ int main(int argc, char* argv[]) {
         nEventsNotReached = false;
         for (int i = 0; i < iNTotBoards; i++){
             nEventsNotReached = nEventsNotReached || (totalEvents[i] < iNEvts);
-            std::cout << "Board " << i << " has accumulated " << totalEvents[i] << " events." << std::endl;
+
+            if (totalEvents[i]%1000 == 0){
+                std::cout << "Board " << i << " has accumulated " << totalEvents[i] << " events." << std::endl;
+            }
 
         }
 

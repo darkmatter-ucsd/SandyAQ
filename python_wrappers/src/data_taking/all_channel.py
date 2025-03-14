@@ -41,7 +41,7 @@ class AllChannel_DataTaking:
         self.common_cfg_reader = common_config_reader.ConfigurationReader()
         self.config = self.common_cfg_reader.get_data_taking_config()
         
-        self.DC_offset = self.config.get('DATA_TAKING_SETTINGS', 'DC_offset')
+        # self.DC_offset = self.config.get('DATA_TAKING_SETTINGS', 'DC_offset')
         
         self.same_threshold = same_threshold
         self.run_sandyaq_command = "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/sandyaq/build/sandyaq"
@@ -55,13 +55,16 @@ class AllChannel_DataTaking:
                                                            "voltage_config", 
                                                            "temperature",
                                                            "threshold_multiplier",
-                                                           "channel_list"]):
+                                                           "channel_list", 
+                                                           "DC_OFFSET", 
+                                                           "post_trigger"]):
             raise ValueError("data_taking_settings should have all of the required keys: \
                               number_of_events, output_folder, voltage_config, temperature, threshold_multiplier")
         self.data_taking_settings = data_taking_settings
         self.threshold_multiplier = self.data_taking_settings["threshold_multiplier"] * np.ones(24)
         self.timeout = 1800 # in second; kill run after this time
         self.data_taking_settings["timeout"] = self.timeout
+        self.data_taking_settings["data_taking_mode"] = "all_channels"
 
         # check if the config_template is a string and exists
         if not isinstance(config_template_path, str):
@@ -95,7 +98,7 @@ class AllChannel_DataTaking:
 
         data_taking_settings = self.data_taking_settings.copy()
 
-        temp_folder = os.path.join(data_taking_settings["output_folder"], "tmp")
+        temp_folder = os.path.join(data_taking_settings["output_folder"], "DAQ_config")
 
         # first: make a tmp folder to store the temp config files
         if not os.path.exists(temp_folder):
@@ -110,17 +113,17 @@ class AllChannel_DataTaking:
         
         new_config = deepcopy(self.config_template)
 
-        channel_list = np.array(data_taking_settings["channel_list"], dtype=int)
+        # channel_list = np.array(data_taking_settings["channel_list"], dtype=int)
         
         # calculate the channel list for a board
-        board_0_channel_list = channel_list[channel_list <= 11]
-        board_1_channel_list = channel_list[channel_list > 11]
+        board_0_channel_list = data_taking_settings["board_0_channels"]
+        board_1_channel_list = data_taking_settings["board_1_channels"]
         
         for i, _board_channel_list in enumerate([board_0_channel_list, board_1_channel_list]):
             _board_channel_list_str = ""
             board_number = i
             if board_number == 1:
-                board_channel_subtration = 12 # the channel on the board starts from zero
+                board_channel_subtration = len(board_0_channel_list) # DAQ channel on the board starts from zero
             elif board_number == 0:
                 board_channel_subtration = 0
             else:
@@ -135,7 +138,7 @@ class AllChannel_DataTaking:
                     new_config.add_section(section_name)
 
                 # Add the new configuration to the BOARD-0 section
-                new_config.set(section_name, 'DC_OFFSET', str(self.DC_offset))
+                new_config.set(section_name, 'DC_OFFSET', str(data_taking_settings["DC_OFFSET"]))
                 new_config.set(section_name, 'TRIGGER_THRESHOLD', f'{data_taking_settings["channel_threshold_dict"][channel]}')
                 new_config.set(section_name, 'CHANNEL_TRIGGER', 'ACQUISITION_ONLY')
                 new_config.set(section_name, 'PULSE_POLARITY', '1')
@@ -144,7 +147,7 @@ class AllChannel_DataTaking:
             _board_channel_list = _board_channel_list_str[:-1]
             
             new_config.set(f"BOARD-{board_number}", "CHANNEL_LIST", f"{_board_channel_list}")
-            # new_config.set(f"BOARD-{board_number}", "POST_TRIGGER", f"{90}")
+            new_config.set(f"BOARD-{board_number}", "POST_TRIGGER", f"{ data_taking_settings['post_trigger'] }")
         
             # then modify the config template
             # new_config.set(f"BOARD-0", "CHANNEL_LIST", f"{board_0_channel_list}")

@@ -27,19 +27,17 @@ from common.logger import setup_logger
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 
 class GainProcessor:
-    def __init__(self):
+    def __init__(self, output_fname = "gain_info_single_channel"):
         
         self.common_cfg_reader = common_config_reader.ConfigurationReader()
         self.config = self.common_cfg_reader.get_data_processing_config()
         
         self.run_list_path = self.config.get('RUN_PROCESSOR_SETTINGS', 'run_list_output')
         
-        _tmp_path = self.config.get('GAIN_PROCESSOR_SETTINGS', 'gain_list_input')
-        
-        if _tmp_path != self.run_list_path:
-            self.run_list_path = _tmp_path
-        
         self.output_file_path = self.config.get('GAIN_PROCESSOR_SETTINGS', 'gain_list_output')
+        
+        # data_files_name = glob.glob(os.path.join(root, "meta_config_*.json"))
+        # data_files.extend(data_files_name)
         
         self.hdf5_key = self.config.get('RUN_PROCESSOR_SETTINGS', 'hdf5_key')
         
@@ -103,10 +101,15 @@ class GainProcessor:
         self.spe_fit = spe_fit
         
         if not (np.isnan(spe_fit.gain) or np.isnan(spe_fit.gain_error)):
+            spe_position = spe_fit.spe_position
+            spe_position_err = spe_fit.spe_position_error
             gain = spe_fit.gain
             gain_err = spe_fit.gain_error
 
         else:
+            
+            spe_position = np.nan
+            spe_position_err = np.nan
             gain = np.nan
             gain_err = np.nan
             
@@ -115,13 +118,15 @@ class GainProcessor:
         # plt.savefig("./test.png")
         # input("Press Enter to continue...")
             
-        return gain, gain_err
+        return spe_position, spe_position_err, gain, gain_err
     
     def process_runs(self):
         
         all_runs_d2d = self.read_run_list(self.run_list_path)
         all_runs_d2d = self.data_selection_cuts_4_gain_analysis(all_runs_d2d)
         
+        spe_position_list = []
+        spe_position_err_list = []
         gain_list = []
         gain_err_list = []
         
@@ -136,11 +141,15 @@ class GainProcessor:
             #                                                    single_run_info.record_length_sample,
             #                                                    single_run_info.voltage_preamp1_V) 
             
-            gain, gain_err = self.process_single_run(single_run_info)
+            spe_position, spe_position_err, gain, gain_err = self.process_single_run(single_run_info)
             
+            spe_position_list.append(spe_position)
+            spe_position_err_list.append(spe_position_err)
             gain_list.append(gain)
             gain_err_list.append(gain_err)
 
+        all_runs_d2d.__setattr__("spe_position", np.array(spe_position_list))
+        all_runs_d2d.__setattr__("spe_position_err", np.array(spe_position_err_list))
         all_runs_d2d.__setattr__("gain", np.array(gain_list))
         all_runs_d2d.__setattr__("gain_err", np.array(gain_err_list))
         

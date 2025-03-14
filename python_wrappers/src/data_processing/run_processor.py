@@ -84,7 +84,7 @@ class RunProcessor:
 
     def update_info_from_metafile(self, md_full_path: str) -> None:
         
-        self.metadata = metadata_handler.MetadataHandler(md_full_path)
+        self.metadata = metadata_handler.MetadataHandler(md_full_path, get_attr_from_filename = False)
         
         if self.metadata.failure_flag == True:
             self.failure_flag = True

@@ -45,7 +45,7 @@ class MetadataHandler(run_info.RunInfo):
         self.failure_flag = False
         
         self.input_path = self.check_path(filepath)
-        self.update_attr_from_file_name(self.input_path)
+        self.update_attr_from_filename(self.input_path)
         self.update_attr_from_json(self.md_full_path)
         
     def check_path(self, filepath: str) -> str:
@@ -76,7 +76,7 @@ class MetadataHandler(run_info.RunInfo):
         logger.info(f"Reading from: {filepath}")
         return filepath
         
-    def update_attr_from_file_name(self, full_path: str) -> None:
+    def get_paired_files(self, full_path: str) -> None:
         """    
         Map the binary file name to json file name, vice versa.
         It also collect all information from the file name and 
@@ -110,25 +110,22 @@ class MetadataHandler(run_info.RunInfo):
                 
                 self.date_time = pd.to_datetime(f"{self.date_str}_{self.time_str}", format="%Y%m%d_%H%M%S")
                 
-                self.board = int(self.get_board_number(self.channel))
-                
-                self.bin_base_name = f"config_{self.channel}" + \
-                                    f"_{self.threshold_adc}" + \
-                                    f"_{self.date_str}" + \
-                                    f"_{self.time_str}" + \
-                                    f"_board_{self.board}.bin"
-                self.bin_dir_path = self.md_dir_path
-                self.bin_full_path = os.path.join(self.bin_dir_path, self.bin_base_name)
-                
-                if os.path.isfile(self.bin_full_path) == False:
-                    logger.warning(f"Cannot find the corresponding binary file: {self.bin_full_path}.")
-                    self.failure_flag = True
-                
             else:
-                self.failure_flag = True
-                raise ValueError(f"The file format of {full_path} does not match. \n" + \
-                                f"It should be in 'meta_config_{{channel}}_{{threshold}}" + \
-                                f"_{{date_YYYYMMDD}}_{{time_HHMMSS}}.json'")
+                match = re.match(r"meta_config_all_(\d{8})_(\d{6})\.json", basename)
+
+                if match:
+                    self.md_full_path = full_path
+                    self.md_base_name = basename
+                    self.md_dir_path = os.path.dirname(full_path)
+
+                    self.date_str, self.time_str = match.groups()
+                    self.date_time = pd.to_datetime(f"{self.date_str}_{self.time_str}", format="%Y%m%d_%H%M%S")
+
+                else:
+                    self.failure_flag = True
+                    raise ValueError(f"The file format of {full_path} does not match. \n" + \
+                                    f"It should be in 'meta_config_{{channel}}_{{threshold}}" + \
+                                    f"_{{date_YYYYMMDD}}_{{time_HHMMSS}}.json'")
                  
         ### if file path is a bin file
         elif full_path.endswith('.bin'):
@@ -160,32 +157,34 @@ class MetadataHandler(run_info.RunInfo):
                     self.failure_flag = True
             
             else:
-                self.failure_flag = True
-                raise ValueError(f"The file format of {full_path} does not match. \n" + \
-                                f"It should be in 'config_{{channel}}_{{threshold}}" + \
-                                f"_{{date_YYYYMMDD}}_{{time_HHMMSS}}_board_{{board}}.bin'")
+                match = re.match(r"config_all_(\d{8})_(\d{6})_board_(\d+)\.bin", basename)
+
+                if match:
+                    self.bin_full_path = full_path
+                    self.bin_base_name = basename
+                    self.bin_dir_path = os.path.dirname(full_path)
+
+                    self.date_str, self.time_str, self.board = match.groups()
+                    self.board = int(self.board)
+                    self.date_time = pd.to_datetime(f"{self.date_str}_{self.time_str}", format="%Y%m%d_%H%M%S")
+
+                    self.md_base_name = f"meta_config_all_" + \
+                                    f"_{self.date_str}" + \
+                                    f"_{self.time_str}.json"
+                    self.md_dir_path = self.bin_dir_path
+                    self.md_full_path = os.path.join(self.md_dir_path, self.md_base_name)
+                    
+                    if os.path.isfile(self.md_full_path) == False:
+                        logger.warning(f"Cannot find the corresponding meta_data file: {self.md_full_path}. Returning None")
+                        self.failure_flag = True
+
+                else:
+                    self.failure_flag = True
+                    raise ValueError(f"The file format of {full_path} does not match. \n" + \
+                                    f"It should be in 'config_{{channel}}_{{threshold}}" + \
+                                    f"_{{date_YYYYMMDD}}_{{time_HHMMSS}}_board_{{board}}.bin'")
                 
         return None
-                   
-    def get_board_number(self, channel: int) -> int:
-        
-        """    
-        Return the board number given the channel number. 
-        Important: this might not always be true
-        
-        Args:
-            channel (int): channel number
-            
-        Returns:
-            board_number (int): board number corresponding to the
-                                channel number
-        """
-        if channel <= 15:
-            board_number = 0
-        else:
-            board_number = 1
-            
-        return int(board_number)
         
     def update_attr_from_json(self, md_full_path: str) -> None:
         """    
@@ -245,6 +244,47 @@ class MetadataHandler(run_info.RunInfo):
         _tmp = meta_data.get("number_of_events")
         if _tmp != None:
             self.number_of_events = int(meta_data.get("number_of_events")) # FIXME: number_of_events is not saved as integer
+
+        _tmp = meta_data.get("data_taking_mode")
+        if _tmp != None:
+            self.data_taking_mode = str(_tmp)
+
+        _tmp = meta_data.get("post_trigger")
+        if _tmp != None:
+            self.post_trigger = float(_tmp)
+
+        _tmp = meta_data.get("DC_OFFSET")
+        if _tmp != None:
+            self.DC_OFFSET = float(_tmp)
+
+        _tmp = meta_data.get("board_0_channels")
+        if _tmp != None:
+            self.board_0_channels = float(_tmp)
+
+        _tmp = meta_data.get("board_1_channels")
+        if _tmp != None:
+            self.board_1_channels = float(_tmp)
+
+        if self.data_taking_mode == "single_channel":
+            if self.channel in self.board_0_channels:
+                self.board = 0
+            elif self.channel in self.board_1_channels:
+                self.board = 1
+            else:
+                raise ValueError(f"Channel {self.channel} is not in the board_0_channels or board_1_channels")
+            
+            self.bin_base_name = f"config_{self.channel}" + \
+                                    f"_{self.threshold_adc}" + \
+                                    f"_{self.date_str}" + \
+                                    f"_{self.time_str}" + \
+                                    f"_board_{self.board}.bin"
+            self.bin_dir_path = self.md_dir_path
+            self.bin_full_path = os.path.join(self.bin_dir_path, self.bin_base_name)
+            
+            if os.path.isfile(self.bin_full_path) == False:
+                logger.warning(f"Cannot find the corresponding binary file: {self.bin_full_path}.")
+                self.failure_flag = True
+            
         
         # Run tag: whether run_tag is str or list in meta_data file -> into list of run tags
         _tmp = meta_data.get("run_tag")

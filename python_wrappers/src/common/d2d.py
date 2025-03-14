@@ -65,7 +65,10 @@ class data():
                 new_dict[column] = self.__dict__[column][mask]
         
         if not dry:
-            logger.info(f"After cut: {len(self)}")
+            if inplace:
+                logger.info(f"After cut: {len(self)}")
+            else:
+                logger.info(f"After cut: {len(new_dict)}")
                 
         if inplace:   
             return
