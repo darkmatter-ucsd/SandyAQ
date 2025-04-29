@@ -21,33 +21,35 @@
 
 class V1742 : public Digitizer{
     public:
-        V1742(std::string& sConfigFile, CommonConfig_t &CommonConfig)
-            : Digitizer(sConfigFile, CommonConfig, "V1742") {
+        V1742(std::string& sConfigFile, CommonConfig_t &CommonConfig, int BoardNum)
+            : Digitizer(sConfigFile, CommonConfig, "V1742", BoardNum) {
                 m_sConfigFile = sConfigFile;
                 int iReadParamError = ReadX742SpecificParams();
             };
         ~V1742();
 
         int ReadX742SpecificParams();
-        int ProgramDigitizers();
-        int ProgramDefault(int BoardNum);
-        int SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards);
+        int ProgramDigitizer();
+        int ProgramDefault();
+        int SetLVDSSync(int isMaster, int iDaisyChainNum, int iTotalNBoards);
 
         void Quit();
 
         const uint32_t iNbits = 12;
-        double dTs;
+        double x742DRS4dt[4] = {0.2, 0.5, 1., 1./0.75};
+
+        bool m_bIsFlashADC = false;
 
     private:
         uint32_t m_iNch;
         std::string m_sConfigFile;
-        std::vector<uint32_t> m_iFastTriggerDigitizing;
-        std::vector<CAEN_DGTZ_TriggerMode_t> m_iFastTriggerEnabled;
-        std::vector<CAEN_DGTZ_DRS4Frequency_t> m_iDRS4Frequency;
-        std::vector<std::vector<uint32_t>> m_iGroupDCOffset;
-        std::vector<std::vector<uint32_t>> m_iGroupTriggerThreshold;
-        std::vector<uint32_t> m_iRecordLength;
-        std::vector<int> m_iCorrections;
+        uint32_t m_iFastTriggerDigitizing;
+        CAEN_DGTZ_TriggerMode_t m_iFastTriggerEnabled;
+        CAEN_DGTZ_DRS4Frequency_t m_iDRS4Frequency;
+        uint32_t m_iGroupDCOffset[4];
+        uint32_t m_iGroupTriggerThreshold[4];
+        uint32_t m_iRecordLength;
+        int m_iCorrections;
 };
 
 #endif

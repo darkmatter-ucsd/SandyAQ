@@ -8,52 +8,48 @@ int V1725::ReadX725SpecificParams(){
     inih::INIReader r{ m_sConfigFile };
     int ret = 0;
 
-    for (int i : m_iBoardIndices) {
-        std::cout << i << "\n";
-        std::string sBoardCategory = "BOARD-"+std::to_string(i);
-        m_iRecordLength.push_back(r.Get<uint32_t>(sBoardCategory, "RECORD_LENGTH"));
-        m_iCoincidences[i] = r.Get<uint32_t>(sBoardCategory, "COINCIDENCE");
-    }
+    int i = m_iBoardIndex;
+    std::cout << i << "\n";
+    std::string sBoardCategory = "BOARD-"+std::to_string(i);
+    m_iRecordLength = (r.Get<uint32_t>(sBoardCategory, "RECORD_LENGTH"));
+    m_iCoincidences = r.Get<uint32_t>(sBoardCategory, "COINCIDENCE");
 
     return ret;
 }
 
 int V1725::ProgramDigitizers() {
     int ret = 0;
-    for (int i = 0; i < m_iNBoards; i++) {
-        if (m_sFirmwares[i] == "WAVEFORM") {
-            std::cout << "Programming the digitizer with the waveform acquisition firmware\n";
-            ret = ProgramDefault(i);
-        }
-        else if (m_sFirmwares[i] == "DAW") {
-            ret = ProgramDAW(i);
-        }
-        else {
-            std::cout << "ERROR: Firmware not recognized! Options are: 'WAVEFORM' or 'DAW'"<<std::endl;
-            exit(EXIT_FAILURE);
-        }
+    if (m_sFirmware == "WAVEFORM") {
+        std::cout << "Programming the digitizer with the waveform acquisition firmware\n";
+        ret = ProgramDefault();
+    }
+    else if (m_sFirmware == "DAW") {
+        ret = ProgramDAW();
+    }
+    else {
+        std::cout << "ERROR: Firmware not recognized! Options are: 'WAVEFORM' or 'DAW'"<<std::endl;
+        exit(EXIT_FAILURE);
+    }
 
-        if (ret !=0) {
-            std::cout << "ERROR: Could not program board " << i << std::endl;
-            Quit();
-        }
+    if (ret !=0) {
+        std::cout << "ERROR: Could not program board " << m_iBoardIndex << std::endl;
+        Quit();
     }
 
     return ret;
 }
 
 void V1725::Quit() {
-    for (int i = 0; i < m_iNBoards; i++) {
-        CAEN_DGTZ_CloseDigitizer(m_iHandles[i]);
-    }
+    CAEN_DGTZ_CloseDigitizer(m_iHandle);
 }
 
 
 //Default Wavedump
-int V1725::ProgramDefault(int BoardNum) {
+int V1725::ProgramDefault() {
     int ret = 0;
-    int handle = m_iHandles[BoardNum];
-    CAEN_DGTZ_BoardInfo_t BoardInfo = m_BoardInfo[BoardNum];
+    int handle = m_iHandle;
+    int BoardNum = m_iBoardIndex;
+    CAEN_DGTZ_BoardInfo_t BoardInfo = m_BoardInfo;
 
     ret |= CAEN_DGTZ_Reset(handle);
     if (ret != 0) {
@@ -62,19 +58,19 @@ int V1725::ProgramDefault(int BoardNum) {
     }
 
     //Set record length
-    ret |= CAEN_DGTZ_SetRecordLength(handle, m_iRecordLength[BoardNum]);
+    ret |= CAEN_DGTZ_SetRecordLength(handle, m_iRecordLength);
     PrintError(BoardNum, "Setting", "record length", ret);
-    ret |= CAEN_DGTZ_GetRecordLength(handle, &m_iRecordLength[BoardNum]);
-    std::cout << "Record length is " << m_iRecordLength[BoardNum] << " samples\n";
+    ret |= CAEN_DGTZ_GetRecordLength(handle, &m_iRecordLength);
+    std::cout << "Record length is " << m_iRecordLength << " samples\n";
 
     //Set post trigger
-    ret |= CAEN_DGTZ_SetPostTriggerSize(handle, m_iPostTriggers[BoardNum]);
+    ret |= CAEN_DGTZ_SetPostTriggerSize(handle, m_iPostTrigger);
     PrintError(BoardNum, "Setting", "post trigger", ret);
 
     //Set FPIOlevel
     CAEN_DGTZ_IOLevel_t FPIOlevel = CAEN_DGTZ_IOLevel_NIM;
-    if(m_sFPIOLevel[BoardNum] == "NIM"){FPIOlevel = CAEN_DGTZ_IOLevel_NIM;}
-    else if (m_sFPIOLevel[BoardNum] == "TTL"){FPIOlevel = CAEN_DGTZ_IOLevel_TTL;}
+    if(m_sFPIOLevel == "NIM"){FPIOlevel = CAEN_DGTZ_IOLevel_NIM;}
+    else if (m_sFPIOLevel == "TTL"){FPIOlevel = CAEN_DGTZ_IOLevel_TTL;}
     else {std::cout<<"Wrong Input for FPIOlevel. Use 'NIM' or 'TTL'. Default: 'NIM'"<<std::endl;}
     ret |= CAEN_DGTZ_SetIOLevel(handle, FPIOlevel);
     PrintError(BoardNum, "Setting", "FPIOlevel", ret);
@@ -84,41 +80,39 @@ int V1725::ProgramDefault(int BoardNum) {
     
     //Set ExtTriggerInputMode
     //TODO: add Veto mode
-    ret |= CAEN_DGTZ_SetExtTriggerInputMode(handle, m_iExternalTriggerEnabled[BoardNum]);
+    ret |= CAEN_DGTZ_SetExtTriggerInputMode(handle, m_iExternalTriggerEnabled);
     PrintError(BoardNum, "Setting", "ExtTriggerInputMode", ret);
 
     //Program the channels
-    ret |= CAEN_DGTZ_SetChannelEnableMask(handle, m_iEnableMask[BoardNum]);
+    ret |= CAEN_DGTZ_SetChannelEnableMask(handle, m_iEnableMask);
     PrintError(BoardNum, "Setting", "ChannelEnableMask", ret);
-    for (int c = 0; c < m_iOpenChannels[BoardNum].size(); c++){
-        int ch = m_iOpenChannels[BoardNum][c];
+    for (int c = 0; c < m_iOpenChannels.size(); c++){
+        int ch = m_iOpenChannels[c];
         CAEN_DGTZ_TriggerPolarity_t TriggerPolarity;
-        if (m_iPulsePolarity[BoardNum][c] == 1) {TriggerPolarity = CAEN_DGTZ_TriggerOnRisingEdge;} //Rising edge for pos pulse
+        if (m_iPulsePolarity[c] == 1) {TriggerPolarity = CAEN_DGTZ_TriggerOnRisingEdge;} //Rising edge for pos pulse
         else {TriggerPolarity = CAEN_DGTZ_TriggerOnFallingEdge;} //Falling edge for neg pulse
 
-        ret |= CAEN_DGTZ_SetChannelDCOffset(handle, ch, m_iChannelDCOffset[BoardNum][c]);
+        ret |= CAEN_DGTZ_SetChannelDCOffset(handle, ch, m_iChannelDCOffset[c]);
         PrintError(BoardNum, "Setting", "ChannelDCOffset", ret);
 
         ret |= CAEN_DGTZ_SetTriggerPolarity(handle, ch, TriggerPolarity);
         PrintError(BoardNum, "Setting", "ChannelTriggerPolarity", ret);
 
-        ret |= CAEN_DGTZ_SetChannelTriggerThreshold(handle, ch, m_iTriggerThresholds[BoardNum][c]);
+        ret |= CAEN_DGTZ_SetChannelTriggerThreshold(handle, ch, m_iTriggerThresholds[c]);
         PrintError(BoardNum, "Setting", "ChannelTriggerThreshold", ret);
     }
 
-    std::cout << "Size of channel trigger settings: " << m_sChannelTriggerSetting[BoardNum].size() << "\n";
+    std::cout << "Size of channel trigger settings: " << m_sChannelTriggerSetting.size() << "\n";
     //Special pair settings for the V1725/30
-    for (int c = 0; c < m_iNChannels[BoardNum]; c+=2) {
-        if (m_iEnableMask[BoardNum] & (0x3<<c)) { //If either channel c or channel c+1 is enabled
+    for (int c = 0; c < m_iNChannels; c+=2) {
+        if (m_iEnableMask & (0x3<<c)) { //If either channel c or channel c+1 is enabled
             std::cout << "Channel " << c << " or " << c+1 << " is enabled\n";
             CAEN_DGTZ_TriggerMode_t modes[2];
             CAEN_DGTZ_TriggerMode_t couple_mode;
             uint32_t pair_chmask = 0;
-            
-
 
             for (int j = 0; j < 2; j++){
-                if ((m_iEnableMask[BoardNum] & (1<<(c+j)))>>(c+j)) modes[j] = m_sChannelTriggerSetting[BoardNum][c+j];
+                if ((m_iEnableMask & (1<<(c+j)))>>(c+j)) modes[j] = m_sChannelTriggerSetting[c+j];
                 else modes[j] = CAEN_DGTZ_TRGMODE_DISABLED;
             }
 
@@ -135,7 +129,7 @@ int V1725::ProgramDefault(int BoardNum) {
                 pair_chmask = (0x2 << c);
             }
 
-            pair_chmask &= m_iEnableMask[BoardNum];
+            pair_chmask &= m_iEnableMask;
 
             ret |= CAEN_DGTZ_SetChannelSelfTrigger(handle, couple_mode, pair_chmask);
             PrintError(BoardNum, "Setting", "ChannelSelfTriggerMode", ret);
@@ -148,7 +142,7 @@ int V1725::ProgramDefault(int BoardNum) {
 
     ret |= CAEN_DGTZ_ReadRegister(handle, 0x810C, &global_trigger_reg_data);
     PrintError(BoardNum, "Reading", "Register[0x810c]", ret);
-    ret |= CAEN_DGTZ_WriteRegister(handle, 0x810C, (global_trigger_reg_data|(m_iCoincidences[BoardNum]<<24)));
+    ret |= CAEN_DGTZ_WriteRegister(handle, 0x810C, (global_trigger_reg_data|(m_iCoincidences<<24)));
     PrintError(BoardNum, "Writing", "Register[0x810c]", ret);
 
     //Enable extended trigger time tag
@@ -177,7 +171,7 @@ int V1725::ProgramDefault(int BoardNum) {
     printf("LVDS Register: %u\n", lvds_reg_data);
     printf("Acquisition Control Register: %u\n", acq_ctrl_reg_data);
     printf("Board Configuration Register: %u\n", board_config_reg_data);
-    printf("Coincidence level: %u\n", m_iCoincidences[BoardNum]);
+    printf("Coincidence level: %u\n", m_iCoincidences);
 
     if (ret)/* Get time in milliseconds from the computer internal clock */
         printf("Warning: errors found during the programming of the digitizer(Board[%u]).\nSome settings may not be executed\n", BoardNum);
@@ -187,18 +181,18 @@ int V1725::ProgramDefault(int BoardNum) {
     return ret;
 };
 
-int V1725::ProgramDAW(int BoardNum) {
+int V1725::ProgramDAW() {
 
 };
 
-int V1725::SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards) {
+int V1725::SetLVDSSync(int isMaster, int iDaisyChainNum, int iTotalNBoards) {
         //This one write register is pretty complicated, let's summarize it:
     //  1) Enables LVDS couple 0-3 as input
     //  2) Enables LVDS couple 4-7 as output
     //  3) TRG OUT propagates motherboard signals (bits [17:16])
     //  4) Signal that is propagated is busy (bits[19:18])
     //  5) Use extended trigger time stamp (BECAUSE WHY WOULD YOU NOT USE IT??? SERIOUSLY, USE IT!!!)
-    int handle = m_iHandles[BoardNum];
+    int handle = m_iHandle;
     uint32_t ret = 0;
     uint32_t reg;
 

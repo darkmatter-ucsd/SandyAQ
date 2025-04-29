@@ -4,80 +4,77 @@ V1742::~V1742() {
     Quit();
 }
 
-int V1742::ProgramDigitizers() {
+int V1742::ProgramDigitizer() {
     int ret = 0;
-    for (int i = 0; i < m_iNBoards; i++) {
-        if (m_sFirmwares[i] == "WAVEFORM") {
-            std::cout << "Programming the digitizer with the waveform acquisition firmware\n";
-            ret = ProgramDefault(i);
-        }
-        else {
-            std::cout << "ERROR: Firmware not recognized! Options for the V1742 are: 'WAVEFORM'"<<std::endl;
-            exit(EXIT_FAILURE);
-        }
 
-        if (ret !=0) {
-            std::cout << "ERROR: Could not program board " << i << std::endl;
-            Quit();
-        }
+    if (m_sFirmware == "WAVEFORM") {
+        std::cout << "Programming the digitizer with the waveform acquisition firmware\n";
+        ret = ProgramDefault();
+    }
+    else {
+        std::cout << "ERROR: Firmware not recognized! Options for the V1742 are: 'WAVEFORM'"<<std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    if (ret !=0) {
+        std::cout << "ERROR: Could not program board " << m_iBoardIndex << std::endl;
+        Quit();
     }
 
     return ret;
 }
 
 void V1742::Quit() {
-    for (int i = 0; i < m_iNBoards; i++) {
-         /* stop the acquisition */
-        // CAEN_DGTZ_SWStopAcquisition(m_iHandles[i]);
-        /* close the device and free the buffers */
-        // if(Event8[i])    CAEN_DGTZ_FreeEvent(handle[i], (void**)&Event8[i]);
-        // if(Event16[i])    CAEN_DGTZ_FreeEvent(handle[i], (void**)&Event16[i]);
-        // CAEN_DGTZ_FreeReadoutBuffer(&buffer[i]);
-        /* close connection to boards */
-        CAEN_DGTZ_CloseDigitizer(m_iHandles[i]);
-    }
+    /* stop the acquisition */
+    // CAEN_DGTZ_SWStopAcquisition(m_iHandles[i]);
+    /* close the device and free the buffers */
+    // if(Event8[i])    CAEN_DGTZ_FreeEvent(handle[i], (void**)&Event8[i]);
+    // if(Event16[i])    CAEN_DGTZ_FreeEvent(handle[i], (void**)&Event16[i]);
+    // CAEN_DGTZ_FreeReadoutBuffer(&buffer[i]);
+    /* close connection to boards */
+    CAEN_DGTZ_CloseDigitizer(m_iHandle);
 }
 
 int V1742::ReadX742SpecificParams(){
     inih::INIReader r{ m_sConfigFile };
     int ret = 0;
 
-    for (int i : m_iBoardIndices) {
-        std::cout << "BOARD " << i << "\n";
-        std::string sBoardCategory = "BOARD-"+std::to_string(i);
-        //ENABLED_FAST_TRIGGER_DIGITIZING should have a value of 1 or 0
-        m_iFastTriggerDigitizing.push_back(r.Get<uint32_t>(sBoardCategory, "ENABLED_FAST_TRIGGER_DIGITIZING"));
-        std::string FastTrgMode = r.Get<std::string>(sBoardCategory, "FAST_TRIGGER");
-        m_iFastTriggerEnabled.push_back(TriggerModeMap[FastTrgMode]);
-        int iDRS4Freq = r.Get<int>(sBoardCategory, "DRS4_FREQUENCY");
-        m_iDRS4Frequency.push_back((CAEN_DGTZ_DRS4Frequency_t) iDRS4Freq);
-        m_iRecordLength.push_back(r.Get<uint32_t>(sBoardCategory, "RECORD_LENGTH"));
-        m_iCorrections.push_back(r.Get<int>(sBoardCategory, "CORRECTIONS"));
+    int i = m_iBoardIndex;
+    std::cout << "BOARD " << i << "\n";
+    std::string sBoardCategory = "BOARD-"+std::to_string(i);
+    //ENABLED_FAST_TRIGGER_DIGITIZING should have a value of 1 or 0
+    
+    m_iFastTriggerDigitizing = (r.Get<uint32_t>(sBoardCategory, "ENABLED_FAST_TRIGGER_DIGITIZING"));
+    std::string FastTrgMode = r.Get<std::string>(sBoardCategory, "FAST_TRIGGER");
+    m_iFastTriggerEnabled = (TriggerModeMap[FastTrgMode]);
+    int iDRS4Freq = r.Get<int>(sBoardCategory, "DRS4_FREQUENCY");
+    m_iDRS4Frequency = ((CAEN_DGTZ_DRS4Frequency_t) iDRS4Freq);
+    m_iRecordLength = (r.Get<uint32_t>(sBoardCategory, "RECORD_LENGTH"));
+    m_iCorrections = (r.Get<int>(sBoardCategory, "CORRECTIONS"));
 
-        std::vector<uint32_t> GroupDCOffset(4);
-        std::vector<uint32_t> GroupTriggerThreshold(4);
-        for (int j=0; j<2; j++){
-            std::string sTRjDCOffset = "TR"+std::to_string(j)+"_DC_OFFSET";
-            std::string sTRjTrigThresh = "TR"+std::to_string(j)+"_TRIGGER_THRESHOLD";
+    m_dDT = x742DRS4dt[iDRS4Freq];
 
-            uint32_t iTRjDCOffset = r.Get<uint32_t>(sBoardCategory, sTRjDCOffset);
-            uint32_t iTRjTriggerThreshold = r.Get<uint32_t>(sBoardCategory, sTRjTrigThresh);
+    
+    for (int j=0; j<2; j++){
+        std::string sTRjDCOffset = "TR"+std::to_string(j)+"_DC_OFFSET";
+        std::string sTRjTrigThresh = "TR"+std::to_string(j)+"_TRIGGER_THRESHOLD";
 
-            GroupDCOffset[2*j] = iTRjDCOffset;
-            GroupDCOffset[2*j+1] = iTRjDCOffset;
+        uint32_t iTRjDCOffset = r.Get<uint32_t>(sBoardCategory, sTRjDCOffset);
+        uint32_t iTRjTriggerThreshold = r.Get<uint32_t>(sBoardCategory, sTRjTrigThresh);
 
-            GroupTriggerThreshold[2*j] = iTRjTriggerThreshold;
-            GroupTriggerThreshold[2*j+1] = iTRjTriggerThreshold;
-        }
-        m_iGroupDCOffset.push_back(GroupDCOffset);
-        m_iGroupTriggerThreshold.push_back(GroupTriggerThreshold);
+        m_iGroupDCOffset[2*j] = iTRjDCOffset;
+        m_iGroupDCOffset[2*j+1] = iTRjDCOffset;
+
+        m_iGroupTriggerThreshold[2*j] = iTRjTriggerThreshold;
+        m_iGroupTriggerThreshold[2*j+1] = iTRjTriggerThreshold;
     }
+    
 }
 
-int V1742::ProgramDefault(int BoardNum) {
+int V1742::ProgramDefault() {
     int ret = 0;
-    int handle = m_iHandles[BoardNum];
-    CAEN_DGTZ_BoardInfo_t BoardInfo = m_BoardInfo[BoardNum];
+    int handle = m_iHandle;
+    int BoardNum = m_iBoardIndex;
 
     ret |= CAEN_DGTZ_Reset(handle);
     if (ret != 0) {
@@ -85,7 +82,7 @@ int V1742::ProgramDefault(int BoardNum) {
         return -1;
     }
 
-    switch( BoardInfo.FormFactor) {
+    switch( m_BoardInfo.FormFactor) {
     case CAEN_DGTZ_VME64_FORM_FACTOR:
     case CAEN_DGTZ_VME64X_FORM_FACTOR:
         m_iNch = 36;
@@ -97,24 +94,24 @@ int V1742::ProgramDefault(int BoardNum) {
     }
 
     //Fast trigger digitization and enabling. Unique to 742s
-    CAEN_DGTZ_EnaDis_t FTDigiEnable = (CAEN_DGTZ_EnaDis_t) m_iFastTriggerDigitizing[BoardNum];
+    CAEN_DGTZ_EnaDis_t FTDigiEnable = (CAEN_DGTZ_EnaDis_t) m_iFastTriggerDigitizing;
     ret |= CAEN_DGTZ_SetFastTriggerDigitizing(handle,FTDigiEnable);
     PrintError(BoardNum, "Setting (x742 only)", "fast trigger digitizing", ret);
-    ret |= CAEN_DGTZ_SetFastTriggerMode(handle,m_iFastTriggerEnabled[BoardNum]);
+    ret |= CAEN_DGTZ_SetFastTriggerMode(handle,m_iFastTriggerEnabled);
     PrintError(BoardNum, "Setting (x742 only)", "fast trigger mode", ret);
 
     //Record length
-    ret |= CAEN_DGTZ_SetRecordLength(handle, m_iRecordLength[BoardNum]);
+    ret |= CAEN_DGTZ_SetRecordLength(handle, m_iRecordLength);
     PrintError(BoardNum, "Setting", "record length", ret);
 
     //Post trigger
-    ret |= CAEN_DGTZ_SetPostTriggerSize(handle, m_iPostTriggers[BoardNum]);
+    ret |= CAEN_DGTZ_SetPostTriggerSize(handle, m_iPostTrigger);
     PrintError(BoardNum, "Setting", "post trigger", ret);
 
     //Set FPIOlevel
     CAEN_DGTZ_IOLevel_t FPIOlevel = CAEN_DGTZ_IOLevel_NIM;
-    if(m_sFPIOLevel[BoardNum] == "NIM"){FPIOlevel = CAEN_DGTZ_IOLevel_NIM;}
-    else if (m_sFPIOLevel[BoardNum] == "TTL"){FPIOlevel = CAEN_DGTZ_IOLevel_TTL;}
+    if(m_sFPIOLevel == "NIM"){FPIOlevel = CAEN_DGTZ_IOLevel_NIM;}
+    else if (m_sFPIOLevel == "TTL"){FPIOlevel = CAEN_DGTZ_IOLevel_TTL;}
     else {std::cout<<"Wrong Input for FPIOlevel. Use 'NIM' or 'TTL'. Default: 'NIM'"<<std::endl;}
     ret |= CAEN_DGTZ_SetIOLevel(handle, FPIOlevel);
     PrintError(BoardNum, "Setting", "FPIOlevel", ret);
@@ -124,42 +121,42 @@ int V1742::ProgramDefault(int BoardNum) {
     
     //Set ExtTriggerInputMode
     //TODO: add Veto mode
-    ret |= CAEN_DGTZ_SetExtTriggerInputMode(handle, m_iExternalTriggerEnabled[BoardNum]);
+    ret |= CAEN_DGTZ_SetExtTriggerInputMode(handle, m_iExternalTriggerEnabled);
     PrintError(BoardNum, "Setting", "ExtTriggerInputMode", ret);
 
     //Channel group enabling. x742 specific settings
-    ret |= CAEN_DGTZ_SetGroupEnableMask(handle, m_iEnableMask[BoardNum]);
-    ret |= CAEN_DGTZ_SetDRS4SamplingFrequency(handle, m_iDRS4Frequency[BoardNum]);
+    ret |= CAEN_DGTZ_SetGroupEnableMask(handle, m_iEnableMask);
+    ret |= CAEN_DGTZ_SetDRS4SamplingFrequency(handle, m_iDRS4Frequency);
     
     //Load and enable the correction tables
-    if (m_iCorrections[BoardNum]){
-        ret |= CAEN_DGTZ_LoadDRS4CorrectionData(handle, m_iDRS4Frequency[BoardNum]);
+    if (m_iCorrections){
+        ret |= CAEN_DGTZ_LoadDRS4CorrectionData(handle, m_iDRS4Frequency);
         ret |= CAEN_DGTZ_EnableDRS4Correction(handle);
         std::cout << "Corrections enabled for V1742 number "<<BoardNum<<"\n";
     }
     
-    for(int i=0; i<(m_iNChannels[BoardNum]/8); i++) {
-        if (m_iEnableMask[BoardNum] & (1<<i)) {
-            if (BoardInfo.FamilyCode == CAEN_DGTZ_XX742_FAMILY_CODE) {
+    for(int i=0; i<(m_iNChannels/8); i++) {
+        if (m_iEnableMask & (1<<i)) {
+            if (m_BoardInfo.FamilyCode == CAEN_DGTZ_XX742_FAMILY_CODE) {
                 for(int j=0; j<8; j++) {
-                    ret |= CAEN_DGTZ_SetChannelDCOffset(handle, (i * 8) + j, m_iChannelDCOffset[BoardNum][i]);
+                    ret |= CAEN_DGTZ_SetChannelDCOffset(handle, (i * 8) + j, m_iChannelDCOffset[i]);
                 }
             }
-            CAEN_DGTZ_TriggerPolarity_t TrigPol = (CAEN_DGTZ_TriggerPolarity_t) m_iPulsePolarity[BoardNum][i];
+            CAEN_DGTZ_TriggerPolarity_t TrigPol = (CAEN_DGTZ_TriggerPolarity_t) m_iPulsePolarity[i];
             ret |= CAEN_DGTZ_SetTriggerPolarity(handle, i, TrigPol); //.TriggerEdge
-            ret |= CAEN_DGTZ_SetGroupFastTriggerDCOffset(handle,i,m_iGroupDCOffset[BoardNum][i]);
-            ret |= CAEN_DGTZ_SetGroupFastTriggerThreshold(handle,i,m_iGroupTriggerThreshold[BoardNum][i]);
+            ret |= CAEN_DGTZ_SetGroupFastTriggerDCOffset(handle,i,m_iGroupDCOffset[i]);
+            ret |= CAEN_DGTZ_SetGroupFastTriggerThreshold(handle,i,m_iGroupTriggerThreshold[i]);
         }
     }
 
     return ret;
 }
 
-int V1742::SetLVDSSync(int BoardNum, int isMaster, int iDaisyChainNum, int iTotalNBoards) {
+int V1742::SetLVDSSync(int isMaster, int iDaisyChainNum, int iTotalNBoards) {
     int ret = 0;
     uint32_t reg;
     uint32_t orreg;
-    int handle = m_iHandles[BoardNum];
+    int handle = m_iHandle;
 
     //ADDR_ACQUISITION_MODE is 0x8100
     //Bit 8 enables the Busy input, Bits [0:1] sets the start mode
