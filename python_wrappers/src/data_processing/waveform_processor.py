@@ -14,6 +14,9 @@ def butter_lowpass_filter(data, cutoff=1e6, fs=250e6, order=1):
     return y
 
 class WFProcessor(object):
+    """
+    A class to process waveform data
+    """
     def __init__(self,data_folder,length_per_event=1000,volt_per_adc=1/4096,polarity=True):
         self.data_folder = data_folder
         self.length_per_event = length_per_event

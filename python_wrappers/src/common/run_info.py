@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import pandas as pd
 import numpy as np
+from typing import Union, List
 
 @dataclass
 class RunInfo:
@@ -15,17 +16,21 @@ class RunInfo:
         For other classes inheriting this class can add more attributes, such as fast_processor
         or metadata_handler
         '''
-        self.bin_full_path: str = ""
+        self.bin_full_path: Union[str, List[str]] = ""
         self.md_full_path: str = ""
         
         self.date_time: pd.Timestamp = np.nan
-        # run_tag: list = field(default_factory=list)
+        self.date_time_str: str = "" # for file regex
         self.run_tag: str = ""
         self.comment: str = ""
+        self.data_taking_mode: str = ""
         
         self.n_channels: int = np.nan
         self.channel: int = np.nan
+        self.channel_list: list = []
         self.board: int = np.nan
+        self.board_0_channels: int = np.nan
+        self.board_1_channels: int = np.nan
         self.threshold_adc: int = np.nan
 
         self.runtime_s: float = np.nan
@@ -36,7 +41,10 @@ class RunInfo:
         self.n_processed_events: int = np.nan
         self.start_index: int = np.nan
         
+        self.post_trigger: float = np.nan
+        self.DC_OFFSET: float = np.nan
         self.record_length_sample: int = np.nan
+        
         self.baseline_n_samples: int = np.nan
         self.baseline_n_samples_avg: int = np.nan
         self.baseline_std_V: float = np.nan

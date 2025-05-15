@@ -47,7 +47,7 @@ class RunProcessor:
         self.hist_range = (float(tmp[0]),float(tmp[1]))
         
         self.hdf5_key = self.config.get('RUN_PROCESSOR_SETTINGS', 'hdf5_key')
-        
+        #FIXME: probably should also put the dictionary to the config file
         self.hdf5_size_dict = {"bin_full_path":350, 
                                 "md_full_path":350,
                                 "run_tag":100,
@@ -58,7 +58,7 @@ class RunProcessor:
         
     def get_data_files(self, data_directories: List[str], exclude_directories: List[str]) -> List[str]:
         """
-        Get all the data files in the given data directories
+        Get all the metadata files in the given data directories
         Also search subdirectories
         """
         data_files = []
@@ -83,8 +83,15 @@ class RunProcessor:
         return data_files
 
     def update_info_from_metafile(self, md_full_path: str) -> None:
-        
-        self.metadata = metadata_handler.MetadataHandler(md_full_path, get_attr_from_filename = False)
+        """
+        Convert the list of data files into a dataframe
+        - extract date, channel, threshold from the file name 
+        - attach the information to the dataframe
+        - sort the dataframe by date and assign run_id
+        - find the corresponding meta file
+        - read voltage, temperature from the meta file
+        """
+        self.metadata = metadata_handler.MetadataHandler(md_full_path)
         
         if self.metadata.failure_flag == True:
             self.failure_flag = True
@@ -131,8 +138,8 @@ class RunProcessor:
                 areas_Vns = self.EventProcessor.areas_Vns
                 
                 self.info.area_hist_count_Vns,self.info.area_bin_edges_Vns = np.histogram(areas_Vns,bins=self.hist_n_bins,range=self.hist_range)
-                self.info.area_hist_count_Vns = self.info.area_hist_count_Vns
-                self.info.area_bin_edges_Vns = self.info.area_bin_edges_Vns
+                # self.info.area_hist_count_Vns = self.info.area_hist_count_Vns
+                # self.info.area_bin_edges_Vns = self.info.area_bin_edges_Vns
                 
                 self.info.baseline_std_V = self.EventProcessor.baseline_std_V
                 self.info.baseline_mean_V = self.EventProcessor.baseline_mean_V
@@ -156,14 +163,13 @@ class RunProcessor:
         
     def check_which_to_process(self, data_files: List[str], 
                                reprocess: bool = False) -> list:
+        
         """
-        Convert the list of data files into a dataframe
-        - extract date, channel, threshold from the file name 
-        - attach the information to the dataframe
-        - sort the dataframe by date and assign run_id
-        - find the corresponding meta file
-        - read voltage, temperature from the meta file
+        check which files to process.
+        If reprocess = True, the already processed files will be processed again.
+        If the number of entries in the class RunInfo in SandyAQ/python_wrappers/src/common/run_info.py is not the same, -> reprocess
         """
+        
         existing_df = None
         if os.path.exists(self.output_file):
             hdf = pd.HDFStore(self.output_file, mode="r+")
@@ -179,8 +185,8 @@ class RunProcessor:
         # Check if the existing DataFrame has the same number of columns as the new data
         length_existing_df = 0 if existing_df is None else len(existing_df.columns)
         logger.info("Number of columns match? " + str(length_existing_df == n_columns))
-        logger.info("Not reprocessing? " + str(not reprocess))
-        logger.info("existing_df is not None? " + str(existing_df is not None))
+        logger.info("Are we reprocessing? " + str(reprocess))
+        logger.info("existing_df is None? " + str(existing_df is None))
         
         # Convert the data_files list to a numpy array for faster processing
         data_files = np.array(data_files)
@@ -203,22 +209,6 @@ class RunProcessor:
             hdf = pd.HDFStore(self.output_file, mode='w')
             hdf.close()            
             
-            # self.hdf_read_mode = "w"
-            # self.hdf = pd.HDFStore(self.output_file, mode='w')
-            
-            # data_df = pd.DataFrame(columns=self.info.__dict__.keys())
-            
-
-            # Create the table in the HDF5 file
-            # with tables.open_file(self.output_file, mode='w') as h5file:
-            #     group = h5file.create_group("/", 'data_group', 'Data Group')
-            #     table = h5file.create_table(group, 'data_table', MyTable, 'Table with custom schema')
-            #     table.flush()
-                
-            # self.hdf5_key = self.hdf5_key + "/data+"
-                
-            # write the header to hdf file
-            # data_df.to_hdf(self.output_file, key=self.hdf5_key, mode="w", format='table')
         else:
             logger.info("No new files to process")
             return
@@ -239,9 +229,7 @@ class RunProcessor:
         logger.info(f"Found {len(data_files)} metadata files in {self.data_folders}")
 
         # Generate the updated run_info DataFrame; write into self.output_file
-        data_files = self.check_which_to_process(data_files, reprocess=self.reprocess)
-        
-        
+        data_files = self.check_which_to_process(data_files, reprocess=self.reprocess)        
         
         # Just to check if the data_files are being processed correctly
         for data_file in data_files:

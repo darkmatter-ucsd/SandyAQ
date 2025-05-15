@@ -73,9 +73,9 @@ class ConfigurationReader:
         path = self.config.get('CONFIG_PATHS', 'data_processing_config')
         return self.load_config(path)
     
-    def get_gain_analysis_config(self):
-        path = self.config.get('CONFIG_PATHS', 'gain_analysis_config')
-        return self.load_config(path)
+    # def get_gain_analysis_config(self):
+    #     path = self.config.get('CONFIG_PATHS', 'gain_analysis_config')
+    #     return self.load_config(path)
     
     def get_sandpro_process_config(self):
         path = self.config.get('PRIVATE_CONFIG_PATHS', 'sandpro_process_config')

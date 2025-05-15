@@ -173,7 +173,10 @@ class EventProcessor:
                                                      length_per_event = self.record_length_sample,
                                                      volt_per_adc=self.volt_per_adc)
                 wfp.set_data(waveform["data_per_channel"][self.start_index:self.end_index,0], unit="mV")
+                
                 wfp.process_wfs()
+                
+                self.event_time_s = waveform['microseconds'][self.start_index:self.end_index]/1e6
                 
                 self.baseline_std_V = np.mean(wfp.baseline_std_V)
                 self.baseline_mean_V = np.mean(wfp.baseline_mean_V)
