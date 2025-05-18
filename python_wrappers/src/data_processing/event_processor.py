@@ -3,8 +3,8 @@ import numpy as np
 import os
 import json
 
-sys.path.insert(0,"/home/daqtest/Processor/sandpro")
-import sandpro
+# sys.path.insert(0,"/home/daqtest/Processor/sandpro")
+# import sandpro
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
@@ -108,6 +108,11 @@ class EventProcessor:
         return 
     
     def get_waveforms(self):
+
+        path_config = self.common_cfg_reader.get_absolute_path_config()
+        sandpro_path = path_config.get("PROCESSING_TOOL", "sandpro_dir")
+        sys.path.insert(0,sandpro_path)
+        import sandpro
         
         processor= sandpro.processing.rawdata.RawData(config_file = self.sandpro_process_config_fname,
                                                     perchannel=False) # what does this perchannel mean?

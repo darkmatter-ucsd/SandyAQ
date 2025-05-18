@@ -9,8 +9,8 @@ import json
 import pandas as pd
 import csv
 
-sys.path.insert(0,"/home/daqtest/Processor/sandpro")
-import sandpro
+# sys.path.insert(0,"/home/daqtest/Processor/sandpro")
+# import sandpro
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
@@ -29,11 +29,13 @@ class GainProcessor:
     def __init__(self):
         
         self.common_cfg_reader = common_config_reader.ConfigurationReader()
+
+        self.path_config = self.common_cfg_reader.get_absolute_path_config()
+        self.run_list_path = self.path_config.get('GAIN_ANALYSIS', 'gain_list_input_file')
+        self.output_file_path = self.path_config.get('GAIN_ANALYSIS', 'gain_list_output_file')
+
         self.config = self.common_cfg_reader.get_data_processing_config()
-        
-        self.run_list_path = self.config.get('RUN_PROCESSOR_SETTINGS', 'run_list_output')
-        self.output_file_path = self.config.get('GAIN_PROCESSOR_SETTINGS', 'gain_list_output')
-        
+                    
         self.hist_n_bins = int(self.config.get('GAIN_PROCESSOR_SETTINGS', 'hist_n_bins'))
         
         tmp = self.config.get("GAIN_PROCESSOR_SETTINGS", "hist_range")

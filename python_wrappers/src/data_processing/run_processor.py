@@ -31,11 +31,14 @@ class RunProcessor:
         self.failure_flag = True
         
         self.common_cfg_reader = common_config_reader.ConfigurationReader()
+
+        # set the paths
+        self.path_config = self.common_cfg_reader.get_absolute_path_config()
+        self.data_folders = self.path_config.get('RUN_ANALYSIS', 'data_dirs').split(' ')
+        self.exclude_folders = self.path_config.get('RUN_ANALYSIS', 'exclude_dirs').split(' ')
+        self.output_file = self.path_config.get('RUN_ANALYSIS', 'run_list_output_file')
+
         self.config = self.common_cfg_reader.get_data_processing_config()
-        
-        self.data_folders = self.config.get('RUN_PROCESSOR_SETTINGS', 'data_folders').split(' ')
-        self.exclude_folders = self.config.get('RUN_PROCESSOR_SETTINGS', 'exclude_folders').split(' ')
-        self.output_file = self.config.get('RUN_PROCESSOR_SETTINGS', 'run_list_output')
         
         self.reprocess = self.config.getboolean('RUN_PROCESSOR_SETTINGS', 'reprocess')
         

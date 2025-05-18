@@ -65,6 +65,28 @@ class ConfigurationReader:
             file_path = os.path.join(self.config_dir,file_path)
         return file_path
     
+    def check_file_path(self, config, section_name, variable_name, preexist_check=True):
+        """
+        Check if the file path is entered and exists.
+        """
+        file_path = config.get(section_name, variable_name)
+
+        if file_path == '':
+            raise ValueError(f"Please set the path to {variable_name} in absolute_path_config.ini")
+        
+        # check if path exists
+        if preexist_check:
+            if not os.path.isfile(file_path):
+                raise FileNotFoundError(f"{file_path} does not exist.")
+            
+        # check if the directory of the file exists
+        else:
+            directory = os.path.dirname(file_path)
+            if not os.path.isdir(directory):
+                raise FileNotFoundError(f"Directory of the file {directory} does not exist.")
+        
+        return
+    
     def get_data_taking_config(self):
         path = self.config.get('CONFIG_PATHS', 'data_taking_config')
         return self.load_config(path)
@@ -72,6 +94,32 @@ class ConfigurationReader:
     def get_data_processing_config(self):
         path = self.config.get('CONFIG_PATHS', 'data_processing_config')
         return self.load_config(path)
+    
+    def get_absolute_path_config(self):
+        path = self.config.get('CONFIG_PATHS', 'absolute_path_config')
+        config = self.load_config(path)
+
+        # check if variables are set
+        self.check_file_path(config, 'GAIN_ANALYSIS', 'gain_list_input_file', preexist_check=False)
+        self.check_file_path(config, 'GAIN_ANALYSIS', 'gain_list_output_file', preexist_check=False)
+        self.check_file_path(config, 'RUN_ANALYSIS', 'run_list_output_file', preexist_check=False)
+
+        data_folders = config.get('RUN_ANALYSIS', 'data_dirs').split(' ')
+        for folder in data_folders:
+            if not os.path.isdir(folder):
+                raise FileNotFoundError(f"{folder} does not exist.")
+            
+        sandpro_path = config.get('PROCESSING_TOOL', 'sandpro_dir')
+        if not os.path.isdir(sandpro_path):
+            raise FileNotFoundError(f"{sandpro_path} does not exist.")
+        
+        exclude_dirs = config.get('RUN_ANALYSIS', 'exclude_dirs').split(' ')
+        if exclude_dirs[0] != '':
+            for folder in exclude_dirs:
+                if not os.path.isdir(folder):
+                    raise FileNotFoundError(f"{folder} does not exist.")
+
+        return config
     
     # def get_gain_analysis_config(self):
     #     path = self.config.get('CONFIG_PATHS', 'gain_analysis_config')
