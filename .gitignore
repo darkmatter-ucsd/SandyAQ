@@ -18,6 +18,9 @@ python_wrappers/run_list/
 python_wrappers/archived_run_list*
 python_wrappers/notebooks/.ipynb_checkpoints/
 
+# ignoring subsequent changes to this file
+/home/ws/sk6801/sw/UCSD_analysis/SandyAQ/python_wrappers/config/absolute_path_config.ini  
+
 softlink_to_data
 run_list/
 archived_run_list/
