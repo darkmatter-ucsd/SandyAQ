@@ -5,6 +5,7 @@ from matplotlib.colors import LogNorm
 import sys
 import os
 import glob
+import datetime
 
 
 from dataclasses import dataclass
@@ -14,8 +15,8 @@ sys.path.insert(0,os.path.join(current_dir,"../"))
 import common.utils as util
 import common.d2d as d2d
 import common.run_info as run_info
-import data_processing.run_processor as run_processor
-import gain_analysis.gain_processor as gain_processor
+import application.run_processor as run_processor
+import application.gain_processor_hdf5 as gain_processor
 import data_processing.waveform_processor as waveform_processor
 import common.config_reader as common_config_reader
 import common.metadata_handler as metadata_handler
@@ -341,7 +342,9 @@ class FastProcessor:
 
         plt.legend()
         if save_plot:
-            plt.savefig(os.path.join(figure_path,f"plot_{single_run_info.channel}.png"))
+            # today in string format
+            today = datetime.datetime.now().strftime("%Y%m%d")
+            plt.savefig(os.path.join(figure_path,f"plot_{single_run_info.channel}_{today}.png"))
         
         if not show_plot:
             plt.close()

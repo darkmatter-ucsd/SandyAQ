@@ -53,6 +53,7 @@ class GainProcessor:
                             mode='r')
             df['area_hist_count_Vns'] = df['area_hist_count_Vns'].apply(json.loads).apply(np.array)
             df['area_bin_edges_Vns'] = df['area_bin_edges_Vns'].apply(json.loads).apply(np.array)
+            df['channel_list'] = df['channel_list'].apply(json.loads).apply(np.array)
             
             all_runs = d2d.data(df)
             

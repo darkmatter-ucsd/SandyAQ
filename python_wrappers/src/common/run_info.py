@@ -27,7 +27,7 @@ class RunInfo:
         
         self.n_channels: int = np.nan
         self.channel: int = np.nan
-        self.channel_list: list = []
+        self.channel_list: int = np.nan
         self.board: int = np.nan
         self.board_0_channels: int = np.nan
         self.board_1_channels: int = np.nan

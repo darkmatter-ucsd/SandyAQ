@@ -172,7 +172,7 @@ class EventProcessor:
                 
             waveform = self.get_waveforms()
             
-            if waveform != None:
+            if type(waveform) is np.ndarray:
                 
                 wfp = waveform_processor.WFProcessor(self.file_dir, 
                                                      length_per_event = self.record_length_sample,
@@ -223,7 +223,7 @@ class EventProcessor:
             tuple(array, array): randomly_selected_raw_WF_V, randomly_selected_filtered_WF
         """
         
-        if self.waveform != None:
+        if type(self.waveform) is np.ndarray:
             data_processed = self.waveform["data_per_channel"][self.start_index:self.end_index,0,:]
             
             # draw random row

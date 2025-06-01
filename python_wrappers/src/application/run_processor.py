@@ -107,11 +107,10 @@ class RunProcessor:
         self.info.threshold_adc = int(self.metadata.threshold_adc)
         self.info.board = int(self.metadata.board)
         self.info.date_time = self.metadata.date_time
+        self.info.channel_list = json.dumps(self.metadata.channel_list)
         
         self.info.run_tag = self.metadata.run_tag
         self.info.comment = self.metadata.comment
-        
-        self.info.channel = self.metadata.channel
         
         self.info.runtime_s = self.metadata.runtime_s
         self.info.voltage_preamp1_V = float(self.metadata.voltage_preamp1_V)
@@ -120,6 +119,7 @@ class RunProcessor:
         self.info.number_of_events = self.metadata.number_of_events
         
         self.info.record_length_sample = self.metadata.record_length_sample
+        self.info.post_trigger = self.metadata.post_trigger
         
         self.failure_flag = False
         

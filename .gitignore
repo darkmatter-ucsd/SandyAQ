@@ -10,6 +10,7 @@ __pycache__/
 *.bin
 *.json
 *log*
+slurm/
 
 python_wrappers/test_output/
 python_wrappers/build
