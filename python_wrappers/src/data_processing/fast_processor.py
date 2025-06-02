@@ -50,12 +50,12 @@ class FastInfo(run_info.RunInfo):
         
         self.integral_window = None
         
-        self.GainProcessor = None
         
         # def set_spe_fit(spe_fit):
         #     self.spe_fit
         self.spe_fit = None
         self.EventProcessor = None
+        self.RunProcessor = None
     
 class FastProcessor:
     def __init__(self,
@@ -104,6 +104,7 @@ class FastProcessor:
         RunProcessor = run_processor.RunProcessor()
         
         RunProcessor.update_info_from_metafile(md_full_path)
+        RunProcessor.update_info_processed_events(set_waveform = True)
         fast_info.set_run_info_from_dict(RunProcessor.info.__dict__)        
         
         bin_full_path = RunProcessor.info.bin_full_path
@@ -112,37 +113,40 @@ class FastProcessor:
         voltage_preamp1_V = RunProcessor.info.voltage_preamp1_V
         
         
-        fast_info.gain, fast_info.gain_err = GainProcessor.process_single_run(bin_full_path,
-                                               number_of_events,
-                                               record_length_sample,
-                                               voltage_preamp1_V,
-                                               set_waveform=True)
+        # fast_info.gain, fast_info.gain_err = GainProcessor.process_single_run(bin_full_path,
+        #                                        number_of_events,
+        #                                        record_length_sample,
+        #                                        voltage_preamp1_V,
+        #                                        set_waveform=True)
+
+        spe_position, spe_position_err, fast_info.gain, fast_info.gain_err = GainProcessor.process_single_run(RunProcessor.info)
         
-        if GainProcessor.EventProcessor != None:
+        if RunProcessor.EventProcessor != None:
             
-            fast_info.GainProcessor = GainProcessor
-            fast_info.EventProcessor = GainProcessor.EventProcessor
+            # fast_info.GainProcessor = GainProcessor
+            fast_info.RunProcessor = RunProcessor
+            fast_info.EventProcessor = RunProcessor.EventProcessor
             
-            fast_info.integral_window = GainProcessor.EventProcessor.integral_window
+            fast_info.integral_window = RunProcessor.EventProcessor.integral_window
             
-            fast_info.areas_Vns = GainProcessor.areas_Vns
-            fast_info.heights_V = GainProcessor.heights_V
-            fast_info.processed_event_id = GainProcessor.EventProcessor.processed_event_id
-            fast_info.processed_wfs = GainProcessor.EventProcessor.wfp.processed_wfs
-            fast_info.rise_time_ns = GainProcessor.EventProcessor.wfp.get_rise_time_ns(search_window=fast_info.integral_window)
+            fast_info.areas_Vns = RunProcessor.EventProcessor.areas_Vns
+            fast_info.heights_V = RunProcessor.EventProcessor.heights_V
+            fast_info.processed_event_id = RunProcessor.EventProcessor.processed_event_id
+            fast_info.processed_wfs = RunProcessor.EventProcessor.wfp.processed_wfs
+            fast_info.rise_time_ns = RunProcessor.EventProcessor.wfp.get_rise_time_ns(search_window=fast_info.integral_window)
         
-            fast_info.randomly_selected_raw_WF = GainProcessor.EventProcessor.get_randomly_selected_WF(n_random_WF)[0]
-            fast_info.randomly_selected_filtered_WF = GainProcessor.EventProcessor.get_randomly_selected_WF(n_random_WF)[1]
+            fast_info.randomly_selected_raw_WF = RunProcessor.EventProcessor.get_randomly_selected_WF(n_random_WF)[0]
+            fast_info.randomly_selected_filtered_WF = RunProcessor.EventProcessor.get_randomly_selected_WF(n_random_WF)[1]
         
-            fast_info.area_hist_count_Vns = GainProcessor.area_hist_count_Vns
-            fast_info.area_bin_edges_Vns = GainProcessor.area_bin_edges_Vns
+            # fast_info.area_hist_count_Vns = RunProcessor.area_hist_count_Vns
+            # fast_info.area_bin_edges_Vns = RunProcessor.area_bin_edges_Vns
             
             # fast_info.baseline_n_samples = GainProcessor.EventProcessor.baseline_n_samples
             # fast_info.baseline_n_samples_avg = GainProcessor.EventProcessor.baseline_n_samples_avg
             # fast_info.n_channels = GainProcessor.EventProcessor.n_channels
             
-            fast_info.baseline_std_V = GainProcessor.EventProcessor.baseline_std_V
-            fast_info.baseline_mean_V = GainProcessor.EventProcessor.baseline_mean_V
+            fast_info.baseline_std_V = RunProcessor.EventProcessor.baseline_std_V
+            fast_info.baseline_mean_V = RunProcessor.EventProcessor.baseline_mean_V
             # fast_info.n_processed_events = GainProcessor.EventProcessor.n_processed_events
             # fast_info.start_index = GainProcessor.EventProcessor.start_index
         
@@ -177,10 +181,13 @@ class FastProcessor:
             self.plot_waveform_single_run(fast_info, 
                                         show_plot = show_plot, 
                                         save_plot = save_plot)
+
+        else:
+            raise ValueError("list_of_fast_info should be a list of FastInfo or a single FastInfo object")
             
         return
     
-    def plot_waveform_single_run(self, single_run_info, show_plot = False, save_plot = True):
+    def plot_waveform_single_run(self, single_run_info:FastInfo, show_plot = False, save_plot = True):
 
         if not show_plot and not save_plot:
             raise ValueError("Cannot have both show_plot and save_plot as False")
@@ -270,8 +277,8 @@ class FastProcessor:
 
         axes[2,0].set_title(f"Integrated area distribution channel {single_run_info.channel}")
         axes[2,0].hist(single_run_info.areas_Vns,
-                        bins=single_run_info.GainProcessor.hist_n_bins,
-                        range=single_run_info.GainProcessor.hist_range,
+                        bins=single_run_info.RunProcessor.hist_n_bins,
+                        range=single_run_info.RunProcessor.hist_range,
                         histtype='step',
                         color='red', 
                         label="Integrated area")
@@ -304,6 +311,9 @@ class FastProcessor:
                     axes[2,0].axvspan(single_run_info.spe_fit.spe_position - single_run_info.spe_fit.spe_position_error, 
                                       single_run_info.spe_fit.spe_position + single_run_info.spe_fit.spe_position_error,
                                     alpha = 0.5, color="tab:green")
+
+                else:
+                    logger.warning(f"Cannot determine SPE for file: {single_run_info.bin_full_path}")
                 
             # except:
             #     print("Could not fit SPE")
@@ -320,8 +330,8 @@ class FastProcessor:
         axes[2,1].set_title(f"Integrated area vs height channel {single_run_info.channel}")
         # axes[1,1].hist(heights_V,bins=100,range=(0,40),histtype='step')
         axes[2,1].hist2d(single_run_info.areas_Vns,single_run_info.heights_V,
-                         bins=[single_run_info.GainProcessor.hist_n_bins,100],
-                         range=[list(single_run_info.GainProcessor.hist_range),[0,0.06]],
+                         bins=[single_run_info.RunProcessor.hist_n_bins,100],
+                         range=[list(single_run_info.RunProcessor.hist_range),[0,0.06]],
                          cmap='viridis',
                          norm=LogNorm())
         # axes[2,1].hist2d(single_run_info.areas_Vns,single_run_info.heights_V,bins=[200,100],cmap='viridis',norm="log",label="")

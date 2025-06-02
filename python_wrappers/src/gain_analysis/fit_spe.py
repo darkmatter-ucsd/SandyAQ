@@ -11,6 +11,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
+import common.config_reader as common_config_reader
 from common.logger import setup_logger
 
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
@@ -28,10 +29,6 @@ class FitSPE:
         self.bias_voltage = bias_voltage
         self.area_hist_count_Vns = area_hist_count_Vns
         self.area_bin_edges_Vns = area_bin_edges_Vns
-        # self.plot = plot
-        # self.show_plot = show_plot
-        # self.save_plot = save_plot
-        # self.output_name = output_name
         
         self.spe_position = np.nan
         self.spe_position_error = np.nan
@@ -41,33 +38,58 @@ class FitSPE:
         # for checking
         self.PE_rough_position = np.nan
         self.PE_rough_amplitude = np.nan
-        
-        # checked by eyes that 0.03 is good, but can do a more serious cut
-        self.good_fit_threshold = 0.03
-        self.distance_rough_guess = {45:0.22,
-                                     46:0.25, 
-                                     47:0.3, 
-                                     48:0.5, 
-                                     49:0.5, 
-                                     50:0.6,
-                                     51:0.7,
-                                     52:0.8}
-        
-        
-        self.guess_peaks(distance_rough_guess = self.distance_rough_guess[abs(self.bias_voltage)])
-        if self.n_peaks >= 3:
+
+        ###########
+        self.read_config()
+        self.distance_rough_guess = self.distance_rough_guess_dict[abs(self.bias_voltage)]
+        self.guess_peaks(distance_rough_guess = self.distance_rough_guess)
+
+        if self.n_peaks >= 2:
             self.fit_peaks()
-            mean_peak_width = self.get_mean_peak_width()
+            self.mean_peak_width = self.get_mean_peak_width()
             
             if self.n_good_fit >= 3:
-                self.get_gain(tolerance = mean_peak_width/5)
-                
+                self.get_gain(tolerance = self.mean_peak_width/5)
+
+            elif self.n_good_fit >= 1:
+                self.get_rough_gain()
+
+            else:
+                logger.warning("Not enough good peaks to calculate gain")
+        else:
+            logger.warning("Not enough peaks to determine the finger fit")
+
+
+
+
+    def read_config(self):
+        '''Read the config file and set the parameters'''
+        # This function can be used to read the config file and set the parameters
+
+        self.common_cfg_reader = common_config_reader.ConfigurationReader()
+        self.fit_config = self.common_cfg_reader.get_data_processing_config()
+        
+        self.good_fit_threshold = float(self.fit_config.get('FIT_SPE_SETTINGS', 'good_fit_threshold'))  
+        
+        self._input_impedance = float(self.fit_config.get('FIT_SPE_SETTINGS', 'input_impedance_Ohm'))  
+        
+        tmp = self.fit_config.get('FIT_SPE_SETTINGS', 'spe_position_guess')
+        tmp = tmp.split(' ')
+        self.distance_rough_guess_list = tmp
+
+        tmp = self.fit_config.get('FIT_SPE_SETTINGS', 'spe_bias_voltage')
+        tmp = tmp.split(' ')
+        self.distance_rough_guess_Vbias_list = tmp
+        
+        # create a dictionary for the distance_rough_guess
+        self.distance_rough_guess_dict = {}
+        for i in range(len(self.distance_rough_guess_list)):
+            self.distance_rough_guess_dict[float(self.distance_rough_guess_Vbias_list[i])] = float(self.distance_rough_guess_list[i])
             
     def guess_peaks(self, distance_rough_guess = 0.5):
 
         self.bin_centers = self.area_bin_edges_Vns[:-1] + np.diff(self.area_bin_edges_Vns)/2
         bin_density = 10/len(self.bin_centers)
-        # distance_rough_guess = 0.5 # distance between peaks in mV*ns
 
         self.peaks, _ = find_peaks(self.area_hist_count_Vns, height=5, 
                               distance=distance_rough_guess/bin_density)
@@ -242,6 +264,8 @@ class FitSPE:
                 consecutive_good_peaks = 0
         
         if (max_n_consective_good_peaks < len(self.mu_list) - self.n_good_fit) or (max_n_consective_good_peaks<3):
+            self.get_rough_gain()
+            logger.warning("Not enough good peaks to calculate gain")
             return
                     
         
@@ -290,18 +314,49 @@ class FitSPE:
             
             count += 1
             
-        input_impedance = 50 #ohm
         if sem < tolerance:
             self.spe_position = mean
             self.spe_position_error = sem
         
-            self.gain = self.spe_position*1e-9/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
-            self.gain_error = self.spe_position_error*1e-9/input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
+            self.gain = self.spe_position*1e-9/self._input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
+            self.gain_error = self.spe_position_error*1e-9/self._input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
+        else: 
+            self.get_rough_gain()
+
         
         # print(f"Mean, error: {self.spe_position},{self.spe_position_error}")
         # print(f"Gain: {self.gain}")
         return 
-        
+
+    def get_rough_gain(self):  
+        logger.warning("Cannot find a good peak to calculate gain, using rough guess")
+
+        '''Return the gain calculated from the maximum peak
+        param: error (float) - the error of the gain
+        return: gain (float)
+                confidence (float)
+        '''  
+
+        # self.amp_list = np.array(self.amp_list)
+        # self.mu_list = np.array(self.mu_list)
+        # self.sig_list = np.array(self.sig_list)
+
+        # good peaks are true
+        # self.good_peaks = self.mu_err_list < self.good_fit_threshold
+
+        # if the largest peak is good fit & < than rough position, use it as the SPE peak
+        max_peak_index = np.argmax(self.amp_list)
+        if (self.good_peaks[max_peak_index]) and (self.mu_list[max_peak_index] < 1.7*self.distance_rough_guess):
+            self.spe_position = self.mu_list[max_peak_index]
+            self.spe_position_error = self.sig_list[max_peak_index]
+    
+            self.gain = self.spe_position*1e-9/self._input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
+            self.gain_error = self.spe_position_error*1e-9/self._input_impedance/1.6e-19 # to V*s/Ohm -> I*s -> charge / 1e charge
+        else:
+            logger.warning("No rough guess found, setting gain to NaN")
+    
+        return
+
     # Let's create a function to model and create data 
     def gaussian_func(self, x, a, x0, sigma): 
         return a*np.exp(-(x-x0)**2/(2*sigma**2))

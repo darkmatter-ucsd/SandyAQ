@@ -167,3 +167,4 @@ class GainProcessor:
 if __name__ == "__main__":
     processor = GainProcessor()
     processor.process_runs()
+    logger.info("Gain processing completed successfully.")
