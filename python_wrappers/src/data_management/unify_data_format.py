@@ -14,11 +14,12 @@ import configparser
 
 
 DATA_FOLDERS = [
-    "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/softlink_to_data/all_data/202405_202406_GXe_threshold/",
-    "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/softlink_to_data/all_data/202405_202409_GXe",
-    "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/softlink_to_data/all_data/202409_tests",
-    "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/softlink_to_data/all_data/202410_LXe",
-    "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/softlink_to_data/all_data/202410_LXe_new"
+    "/kalinka/storage/darkmatter/XENONnT/sk6801/UCSD_data/raw_data/"
+    # "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/softlink_to_data/all_data/202405_202406_GXe_threshold/",
+    # "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/softlink_to_data/all_data/202405_202409_GXe",
+    # "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/softlink_to_data/all_data/202409_tests",
+    # "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/softlink_to_data/all_data/202410_LXe",
+    # "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/softlink_to_data/all_data/202410_LXe_new"
     # Add more data folders as needed, need to be an absolute path
     # "/home/daqtest/DAQ/SandyAQ_vera/SandyAQ/softlink_to_data/all_data/202410_LXe/20241018_all_T98_all_voltages_3.0sig/threshold_calibration/"
 ]
@@ -91,6 +92,7 @@ def get_test_name(full_path):
 v_get_test_name = np.vectorize(get_test_name, otypes=[np.ndarray])
 
 def step_0_check_item():
+    count=0
     
     # Check if "DATA_FOLDERS" is an aboslute path for a directory
     for data_folder in DATA_FOLDERS:
@@ -120,14 +122,11 @@ def step_0_check_item():
             meta_data = json.load(file)
             
         # check if variable already exist
-        if "channel" in meta_data:
-            print('channel is in the meta data file.')
-        if "board" in meta_data:
-            print('channel is in the meta data file.')
-        if "threshold" in meta_data:
-            print('channel is in the meta data file.')
-        if "start_timestamp" in meta_data:
-            print('start_timestamp is in the meta data file.')
+        if "run_tag" not in meta_data:
+            print(f'channel is not in {data_file}.')
+            count +=1
+
+    print(count)
 
     return
 
@@ -727,11 +726,11 @@ def step_2_replace_meta():
 
 if __name__ == "__main__":
     check_dir_path()
-    # step_0_check_item()
+    step_0_check_item()
     # step_1_edit_item()
     # step_1_edit_item_from_config()
     # step_1_add_items()
     # step_1_add_record_length()
     # step1_add_metadata_from_filename()
     # step1_add_board_list()
-    step_2_replace_meta()
+    # step_2_replace_meta()
