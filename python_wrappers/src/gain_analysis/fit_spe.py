@@ -346,7 +346,7 @@ class FitSPE:
 
         # if the largest peak is good fit & < than rough position, use it as the SPE peak
         max_peak_index = np.argmax(self.amp_list)
-        if (self.good_peaks[max_peak_index]) and (self.mu_list[max_peak_index] < 1.7*self.distance_rough_guess):
+        if (self.good_peaks[max_peak_index]) and (self.mu_list[max_peak_index] < 1.7*self.distance_rough_guess) and (self.mu_list[max_peak_index] > self.distance_rough_guess*0.75):
             self.spe_position = self.mu_list[max_peak_index]
             self.spe_position_error = self.sig_list[max_peak_index]
     

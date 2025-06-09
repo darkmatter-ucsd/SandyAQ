@@ -28,7 +28,7 @@ class RunProcessor:
     ""
     def __init__(self):
         
-        self.failure_flag = True
+        self.failure_flag = False
         
         self.common_cfg_reader = common_config_reader.ConfigurationReader()
 
@@ -55,7 +55,9 @@ class RunProcessor:
                                 "md_full_path":350,
                                 "run_tag":100,
                                 "comment":350,
-                                "area_hist_count_Vns":800}
+                                "area_hist_count_Vns":800,
+                                "board_0_channels":100,
+                                "board_1_channels":100}
         
         self.info = run_info.RunInfo()
         
@@ -100,28 +102,7 @@ class RunProcessor:
             self.failure_flag = True
             return None
         
-        self.info.bin_full_path = self.metadata.bin_full_path
-        self.info.md_full_path = self.metadata.md_full_path
-        
-        self.info.channel = int(self.metadata.channel)
-        self.info.threshold_adc = int(self.metadata.threshold_adc)
-        self.info.board = int(self.metadata.board)
-        self.info.date_time = self.metadata.date_time
-        self.info.channel_list = json.dumps(self.metadata.channel_list)
-        
-        self.info.run_tag = self.metadata.run_tag
-        self.info.comment = self.metadata.comment
-        
-        self.info.runtime_s = self.metadata.runtime_s
-        self.info.voltage_preamp1_V = float(self.metadata.voltage_preamp1_V)
-        self.info.temperature_K = self.metadata.temperature_K
-        
-        self.info.number_of_events = self.metadata.number_of_events
-        
-        self.info.record_length_sample = self.metadata.record_length_sample
-        self.info.post_trigger = self.metadata.post_trigger
-        
-        self.failure_flag = False
+        self.info.set_run_info_from_dict(self.metadata.__dict__)        
         
         return
     
@@ -148,6 +129,8 @@ class RunProcessor:
                 self.info.baseline_mean_V = self.EventProcessor.baseline_mean_V
                 self.info.n_processed_events = self.EventProcessor.n_processed_events
                 self.info.start_index = self.EventProcessor.start_index
+
+                
                 
             else: 
                 self.failure_flag = True
@@ -236,12 +219,15 @@ class RunProcessor:
         
         # Just to check if the data_files are being processed correctly
         for data_file in data_files:
-            self.failure_flag = True # refresh the flag in loop
+            self.failure_flag = False # refresh the flag in loop
             
             data = self.single_data_file_to_dict(data_file) 
+            if self.failure_flag == True:
+                logger.error(f"Processing of {data_file} failed. Skipping this file.")
+                continue
 
             # Create a DataFrame from the new data -> hdf; write to file in append mode
-            if isinstance(data,dict):
+            if isinstance(data,dict) and (data["data_taking_mode"] == "single_channel"):
                 new_df = pd.DataFrame.from_dict([data])
                 # new_df.to_hdf(self.output_file, key=self.hdf5_key, mode='a', 
                 #               append=True, format='table')
@@ -249,7 +235,9 @@ class RunProcessor:
                 precision = 5
                 new_df['area_hist_count_Vns'] = new_df['area_hist_count_Vns'].apply(lambda x: json.dumps(np.around(x, precision).tolist()))
                 new_df['area_bin_edges_Vns'] = new_df['area_bin_edges_Vns'].apply(lambda x: json.dumps(np.around(x, precision).tolist()))
-
+                new_df['channel_list'] = new_df['channel_list'].apply(json.dumps)
+                new_df['board_0_channels'] = new_df['board_0_channels'].apply(json.dumps)
+                new_df['board_1_channels'] = new_df['board_1_channels'].apply(json.dumps)
                 
                 hdf = pd.HDFStore(self.output_file, mode='a')
                 
@@ -258,6 +246,9 @@ class RunProcessor:
                             index=False,
                             min_itemsize=self.hdf5_size_dict)
                 hdf.close()
+
+            # else: 
+                # raise ValueError(f"Data file {data_file} is not a valid single channel data file or processing failed.")
 
         
         # Load the updated run_info DataFrame
