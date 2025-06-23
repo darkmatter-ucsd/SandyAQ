@@ -74,14 +74,17 @@ class GainProcessor:
             d2d.data: data from all runs in df/dict format after cuts
         """
         # data selection cuts
-        mask_run_tag = util.vec_regex_search('GXe/gain_calibration', all_runs.run_tag)
+        # mask_run_tag = util.vec_regex_search('GXe/gain_calibration', all_runs.run_tag)
         mask_run_tag_remove_trash = ~util.vec_regex_search('trash', all_runs.run_tag)
+        # mask_run_tag_remove_trash = ~util.vec_regex_search('test', all_runs.run_tag)
         mask_time = (all_runs.date_time > from_date)
-        mask_start_index_nan = ~np.isnan(all_runs.start_index)
+        # mask_start_index_nan = ~np.isnan(all_runs.start_index)
         mask_nevents_nan = ~np.isnan(all_runs.number_of_events)
         mask_record_length_nan = ~np.isnan(all_runs.record_length_sample)
         
-        mask = mask_run_tag & mask_run_tag_remove_trash & mask_time & mask_record_length_nan & mask_start_index_nan & mask_nevents_nan
+        # mask = mask_run_tag & mask_run_tag_remove_trash & mask_time & mask_record_length_nan & mask_start_index_nan & mask_nevents_nan
+        # mask = mask_run_tag_remove_trash & mask_time & mask_record_length_nan & mask_start_index_nan & mask_nevents_nan
+        mask = mask_run_tag_remove_trash & mask_time & mask_record_length_nan & mask_nevents_nan
         
         all_runs.apply_mask(mask, inplace=True, dry = False)
         

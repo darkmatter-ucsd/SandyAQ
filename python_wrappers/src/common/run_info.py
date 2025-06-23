@@ -19,37 +19,42 @@ class RunInfo:
         self.bin_full_path: Union[str, List[str]] = ""
         self.md_full_path: str = ""
         
+        # from metadata
         self.date_time: pd.Timestamp = np.nan
         self.date_time_str: str = "" # for file regex
-        self.run_tag: str = ""
         self.comment: str = ""
-        self.data_taking_mode: str = ""
-        
-        self.n_channels: int = np.nan
-        self.channel: int = np.nan
-        self.channel_list: int = np.nan
-        self.board: int = np.nan
-        self.board_0_channels: int = np.nan
-        self.board_1_channels: int = np.nan
-        self.threshold_adc: int = np.nan
-
         self.runtime_s: float = np.nan
         self.voltage_preamp1_V: float = np.nan
         self.temperature_K: float = np.nan
-        
+        self.board_0_channels: int = np.nan
+        self.board_1_channels: int = np.nan
+        self.data_taking_mode: str = ""
+        self.channel_list: int = np.nan
+        self.run_tag: str = ""
+
+        # datataking config from the metadata
         self.number_of_events: int = np.nan
-        self.n_processed_events: int = np.nan
-        self.start_index: int = np.nan
-        
         self.post_trigger: float = np.nan
         self.DC_OFFSET: float = np.nan
         self.record_length_sample: int = np.nan
         
-        self.baseline_n_samples: int = np.nan
-        self.baseline_n_samples_avg: int = np.nan
+        # for waveform processor; board dependent
+        self.n_channels: int = np.nan
+        
+        # event processing config
+        # self.start_index: int = np.nan
+        # self.baseline_n_samples: int = np.nan
+        # self.baseline_n_samples_avg: int = np.nan
+
+        # channel level info
+        self.channel: int = np.nan
+        self.board: int = np.nan
+        self.threshold_adc: int = np.nan
+        self.n_processed_events: int = np.nan
+
+        # result of channel level event processing
         self.baseline_std_V: float = np.nan
         self.baseline_mean_V: float = np.nan
-        
         self.area_hist_count_Vns: float = np.nan
         self.area_bin_edges_Vns: float = np.nan
         

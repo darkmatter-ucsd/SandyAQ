@@ -153,8 +153,13 @@ class MetadataHandler(run_info.RunInfo):
         else:
             raise ValueError("Start timestamp is missing in the metadata file.")
         
+        _tmp = meta_data.get("comment")
+        if _tmp != None:
+            self.comment = str(_tmp)
+        else:
+            # raise ValueError("Comment is missing in the metadata file.")
+            self.comment = "No comment provided."
         
-                
         # Parse the time string into a timedelta object
         _tmp = meta_data.get("runtime")
         if _tmp != None:
@@ -165,16 +170,9 @@ class MetadataHandler(run_info.RunInfo):
             # self.failure_flag = True
             # raise ValueError("Runtime is missing in the metadata file.")
 
-        _tmp = meta_data.get("comment")
-        if _tmp != None:
-            self.comment = str(_tmp)
-        else:
-            # raise ValueError("Comment is missing in the metadata file.")
-            self.comment = "No comment provided."
-        
         voltage_config = meta_data.get("voltage_config")
         if voltage_config:
-            self.voltage_preamp1_V = voltage_config["preamp_1"]  # Assume all preamps have the same voltage
+            self.voltage_preamp1_V = float(voltage_config["preamp_1"])  # Assume all preamps have the same voltage
         else:
             raise ValueError("Voltage configuration is missing in the metadata file.")
             
@@ -184,21 +182,6 @@ class MetadataHandler(run_info.RunInfo):
         else:
             raise ValueError("Temperature is missing in the metadata file.")
         
-        _tmp = meta_data.get("number_of_events")
-        if _tmp != None:
-            self.number_of_events = int(meta_data.get("number_of_events")) # FIXME: number_of_events is not saved as integer
-        else:
-            raise ValueError("Number of events is missing in the metadata file.")
-
-
-        _tmp = meta_data.get("post_trigger")
-        if _tmp != None:
-            self.post_trigger = float(_tmp)
-
-        _tmp = meta_data.get("DC_OFFSET")
-        if _tmp != None:
-            self.DC_OFFSET = float(_tmp)
-
         _tmp = meta_data.get("board_0_channels")
         if _tmp != None:
             self.board_0_channels = list(_tmp)
@@ -284,12 +267,30 @@ class MetadataHandler(run_info.RunInfo):
             _tmp = meta_data.get("channel_list")
             if _tmp != None:
                 self.channel_list = _tmp
-                self.n_channels = len(_tmp)
+                # self.n_channels = len(_tmp)
             else:
                 self.failure_flag = True
                 raise ValueError("Channel list is missing in the metadata file for all channels data.")
-        
-        #### record length
+
+            _tmp = meta_data.get("channel_threshold_dict")
+            if _tmp != None:
+                self.channel_threshold_dict = _tmp
+
+
+        _tmp = meta_data.get("number_of_events")
+        if _tmp != None:
+            self.number_of_events = int(meta_data.get("number_of_events")) # FIXME: number_of_events is not saved as integer
+        else:
+            raise ValueError("Number of events is missing in the metadata file.")
+
+        _tmp = meta_data.get("post_trigger")
+        if _tmp != None:
+            self.post_trigger = float(_tmp)
+
+        _tmp = meta_data.get("DC_OFFSET")
+        if _tmp != None:
+            self.DC_OFFSET = float(_tmp)
+
         _tmp = meta_data.get("record_length")
         if _tmp != None:
             self.record_length_sample = int(_tmp)
@@ -322,7 +323,8 @@ class MetadataHandler(run_info.RunInfo):
                                 f"_board_{self.board}.bin"
             self.bin_dir_path = self.md_dir_path
             self.bin_full_path = os.path.join(self.bin_dir_path, self.bin_base_name)
-            
+            self.bin_full_path_list = None
+
             # self.check_path(self.bin_full_path, extension=".bin")
             
             if os.path.isfile(self.bin_full_path) == False:
@@ -345,7 +347,7 @@ class MetadataHandler(run_info.RunInfo):
                                 f"_board_1.bin"
             board1_bin_full_path = os.path.join(self.bin_dir_path, board1_bin_base_name)
             
-            if os.path.isfile(board0_bin_base_name) == False:
+            if os.path.isfile(board0_bin_full_path) == False:
                 self.failure_flag = True
                 logger.warning(f"Cannot find the corresponding binary file for board 0: {board0_bin_full_path}.")
                 
@@ -357,8 +359,9 @@ class MetadataHandler(run_info.RunInfo):
                 
                 # raise FileNotFoundError(f"Cannot find the corresponding binary file: {board1_bin_full_path}.")
             
-            self.bin_full_path = [board0_bin_full_path, board1_bin_full_path]
-            self.bin_base_name = [board0_bin_base_name, board1_bin_base_name]
+            self.bin_full_path_list = [board0_bin_full_path, board1_bin_full_path]
+            self.bin_full_path = None
+            self.bin_base_name = board0_bin_base_name
             
             
         return None

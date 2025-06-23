@@ -11,6 +11,7 @@ __pycache__/
 *.json
 *log*
 slurm/
+*trash/
 
 python_wrappers/test_output/
 python_wrappers/build
