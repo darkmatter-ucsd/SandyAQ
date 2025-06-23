@@ -111,7 +111,8 @@ class RunProcessor:
         if self.failure_flag == False:
             self.EventProcessor = event_processor.EventProcessor(self.info.bin_full_path,
                                                     self.info.number_of_events,
-                                                    self.info.record_length_sample)
+                                                    self.info.record_length_sample,
+                                                    self.info.post_trigger)
             self.EventProcessor.process_all_events(set_waveform = set_waveform)
             
             if self.EventProcessor.failure_flag == False:

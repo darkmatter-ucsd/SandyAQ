@@ -19,7 +19,8 @@ logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 class EventProcessor:
     def __init__(self, bin_full_path: str, 
                  number_of_events: int, 
-                 record_length_sample: int):
+                 record_length_sample: int,
+                 post_trigger: float):
         
         """
         Args:
@@ -27,6 +28,7 @@ class EventProcessor:
             number_of_events:     number of events in that data file, probably from
                                   metadata
             record_length_sample: number of samples in each event
+            post_trigger:         percentage of the post trigger, i.e. the percentage
 
         Raises:
             Exception: if processing_mode is neither the required string
@@ -55,9 +57,9 @@ class EventProcessor:
         self.baseline_n_samples_avg = int(self.config.get("EVENT_PROCESSOR_SETTINGS", "n_baseline_samples_avg")) #index to truncate the events before
         
         # get integral window to compute area
-        tmp = self.config.get("EVENT_PROCESSOR_SETTINGS", "integral_window_for_area")
-        tmp = tmp.split(' ')
-        self.integral_window = (float(tmp[0]),float(tmp[1]))
+        self.post_trigger = post_trigger # percentage of the post trigger, i.e. the percentage
+        tmp_start = 1-self.post_trigger/100.0-0.1 # 0.1 is to avoid the edge effect
+        self.integral_window = (tmp_start, tmp_start+0.25)
                 
         # get number of channels per events
         processing_mode = self.config.get("EVENT_PROCESSOR_SETTINGS", "mode")
