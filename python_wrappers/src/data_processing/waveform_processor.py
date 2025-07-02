@@ -1,6 +1,7 @@
 from scipy.signal import butter, lfilter, freqz
 import matplotlib.pyplot as plt
 import numpy as np
+from data_structure.peak_info import PeakInfo
     
 def butter_lowpass(cutoff, fs, order=5):
     nyq = 0.5 * fs
@@ -24,7 +25,10 @@ class WFProcessor(object):
         self.polarity = polarity
         self.wfs = None
 
-    def set_data(self, data, unit = "mV"):
+        self.baseline_mean_V = None
+        self.baseline_std_V = None
+
+    def set_data(self, data, event_time_s = None, unit = "mV"):
         """
         Load data from a numpy array
         Supposed to be in ADC counts
@@ -45,6 +49,26 @@ class WFProcessor(object):
             self.wfs /= 1000
         else:
             raise ValueError("The parameter 'unit' is either 'ADC', 'V' or 'mV'. ")
+        
+        if event_time_s is not None:
+            if len(event_time_s) == self.n_event:
+                self.event_time_s = event_time_s
+            else:
+                raise ValueError("The length of event_time_s must be equal to the number of events in the data. Please set the event time.")
+    
+    def set_event_time(self, event_time_s):
+        """
+        Set the event time for the waveform data.
+        
+        :param event_time_s: array of event times in seconds
+        """
+        if (self.wfs is None) or (self.n_event is None):
+            raise ValueError("Waveform data is not properly set. Please set the waveform data first using set_data().")
+        
+        if len(event_time_s) == self.n_event:
+            self.event_time_s = event_time_s
+        else:
+            raise ValueError("The length of event_time_s must be equal to the number of events in the data.")
 
     def process_wfs(self,baseline_front=(0.0,0.2),cutoff=10e6,fs=250e6):
         baseline_start_f = int(self.length_per_event * baseline_front[0])
@@ -257,3 +281,98 @@ class WFProcessor(object):
             self.rise_time[i] = timer * 4 # now it becomes ns (for V1725, 1 sample = 4 ns)
         
         return self.rise_time
+
+    def get_baseline_single(single_waveform, baseline_front=(0.0,0.2)):
+        """
+        Calculate the baseline mean and standard deviation of the waveform.
+        :param waveform: 1D numpy array of the waveform data
+        :param baseline_front: tuple of two floats, the start and end of the baseline window in percentage of the waveform length
+        :return: baseline_mean_V, baseline_std_V
+        """
+        if not isinstance(single_waveform, np.ndarray):
+            raise TypeError("waveform must be a numpy array")
+
+        baseline_start_f = int(1000 * baseline_front[0])
+        baseline_end_f = int(1000 * baseline_front[1])
+
+        baseline_mean_V = np.mean(single_waveform[baseline_start_f:baseline_end_f])
+        baseline_std_V = np.std(single_waveform[baseline_start_f:baseline_end_f])
+
+        return baseline_mean_V, baseline_std_V
+    
+    def calculate_peak_info_single_event(
+        self, 
+        event_time_s,
+        window_size = 6, 
+        threshold_sig = 3, 
+        min_peak_width_sample = None,
+        ):
+
+        if self.filtered_wfs is None:
+            raise ValueError("Waveform data is not processed. ")
+        
+        if not self.polarity:
+            filtered_wfs = self.filtered_wfs * -1
+        else:
+            filtered_wfs = self.filtered_wfs
+
+        if self.event_time_s is None:
+            raise ValueError("Event time is not set. Please set the event time using set_event_time().")
+        
+        if peak_width_sample is None:
+            peak_width_sample = window_size * 3 # default peak width is twice the window size
+
+        # add rolling window to smooth the data, roll every {window_size} points
+        waveform_smooth = np.convolve(
+            filtered_wfs, 
+            np.ones(window_size)/window_size, mode='valid')
+
+        # recalculated the baseline for the smoothed waveform
+        baseline, baseline_std = self.get_baseline_single(waveform_smooth)
+        threshold = baseline + threshold_sig * baseline_std
+
+        # applying the threshold to find peaks
+        mask = waveform_smooth > threshold
+
+        # mark the start and end of the peaks
+        diff = np.diff(mask)
+        samples_above_threshold = np.where(diff == 1)[0]
+
+        # adjust the end points to account for the smoothing
+        samples_above_threshold[1::2] = samples_above_threshold[1::2] + window_size  
+
+        # remove the last point if it's odd
+        if len(samples_above_threshold) % 2 != 0:
+            samples_above_threshold = samples_above_threshold[:-1]  
+
+        # reshape the points into pairs for better handling
+        peak_boundaries = samples_above_threshold.reshape(-1, 2)
+
+        # remove the pair if they are too close to each other
+        peak_width = peak_boundaries[:,1] - peak_boundaries[:,0]
+        tmp = np.where(peak_width < min_peak_width_sample)
+        peak_boundaries = np.delete(peak_boundaries, tmp, axis=0)
+        
+        # samples_above_threshold = peak_boundaries.flatten()
+
+        peak_boundaries_ns = peak_boundaries * 4 # in ns, assuming the sampling rate is 250 MHz (4 ns per sample)
+        start_time_array_s, end_time_array_s = peak_boundaries_ns[:,0]/1e9, peak_boundaries_ns[:,1]/1e9
+        start_time_array_s += event_time_s
+        end_time_array_s += event_time_s
+
+        height_array_V = np.empty(peak_boundaries_ns.shape[0], dtype=float)
+        area_array_Vns = np.empty(peak_boundaries_ns.shape[0], dtype=float)
+        width_array_ns = np.empty(peak_boundaries_ns.shape[0], dtype=float)
+
+
+        for i, peak_boundary in enumerate(peak_boundaries):
+            height_array_V[i] = np.max(filtered_wfs[peak_boundary[0]:peak_boundary[1]])
+            area_array_Vns[i] = np.sum(filtered_wfs[peak_boundary[0]:peak_boundary[1]])
+            width_array_ns[i] = peak_boundaries_ns[:,1] - peak_boundaries_ns[:,0] 
+
+        peak_info = PeakInfo()
+        peak_info.set_result(start_time_array_s, end_time_array_s, height_array_V, area_array_Vns, width_array_ns)
+
+        return peak_info
+
+    
