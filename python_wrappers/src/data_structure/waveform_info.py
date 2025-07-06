@@ -126,12 +126,14 @@ class WaveformInfo(RunInfo):
         self.peak_area_Vns_array = np.array([], dtype=float)
         self.peak_area_PE_array = np.array([], dtype=float)
 
-        # self.peak_start_time_s_array = []  # seconds since run start time
-        # self.peak_end_time_s_array = []  # seconds since run start time
-        # self.peak_height_V_array = []  # peak height in Volts
-        # self.peak_width_ns_array = []  # peak width in nanoseconds
-        # self.peak_area_Vns_array = []  # peak area in Volts * nan
-        # self.peak_area_PE_array = []  # peak area in PE (photoelectrons)
+        # self.peak_start_time_s_array = [0.1]  # seconds since run start time
+        # self.peak_end_time_s_array = [0.1]  # seconds since run start time
+        # self.peak_rel_start_time_s_array = [0.1]  # seconds since run start time
+
+        # self.peak_height_V_array = [0.1]  # peak height in Volts
+        # self.peak_width_ns_array = [0.1]  # peak width in nanoseconds
+        # self.peak_area_Vns_array = [0.1]  # peak area in Volts * nan
+        # self.peak_area_PE_array = [0.1]  # peak area in PE (photoelectrons)
 
     # def set_result(self, start_time_array_s, end_time_array_s, height_array_V, area_array_Vns, width_array_ns):
     #     """
@@ -155,7 +157,8 @@ class WaveformInfo(RunInfo):
             single_baseline, 
             single_baseline_std, 
             threshold_sig=1, 
-            extend_sum_window=30):
+            extend_sum_window=30,
+            event_id=None):
         
         window_size = 6
         min_peak_width_sample = window_size*3
@@ -204,54 +207,76 @@ class WaveformInfo(RunInfo):
             # self.peak_width_ns_array = []
             # self.peak_area_Vns_array = []
             # self.peak_area_PE_array = []
-            self.peak_start_time_s_array = np.array([], dtype=float)
-            self.peak_end_time_s_array = np.array([], dtype=float)
-            self.peak_height_V_array = np.array([], dtype=float)
-            self.peak_width_ns_array = np.array([], dtype=float)
-            self.peak_area_Vns_array = np.array([], dtype=float)
-            self.peak_area_PE_array = np.array([], dtype=float)
+            # self.peak_start_time_s_array = np.array([], dtype=float)
+            # self.peak_end_time_s_array = np.array([], dtype=float)
+            # self.peak_height_V_array = np.array([], dtype=float)
+            # self.peak_width_ns_array = np.array([], dtype=float)
+            # self.peak_area_Vns_array = np.array([], dtype=float)
+            # self.peak_area_PE_array = np.array([], dtype=float)
             self.n_peaks = 0
             return
         
-        peak_boundaries_ns = peak_boundaries_sample * 4 # in ns, assuming the sampling rate is 250 MHz (4 ns per sample)
-        self.peak_rel_start_time_s_array, self.peak_end_time_s_array = peak_boundaries_ns[:,0]/1e9, peak_boundaries_ns[:,1]/1e9
-        self.peak_start_time_s_array = self.peak_rel_start_time_s_array + self.event_start_time_s
-        self.peak_end_time_s_array += self.event_start_time_s
+        # peak_boundaries_ns = peak_boundaries_sample * 4 # in ns, assuming the sampling rate is 250 MHz (4 ns per sample)
+        
+        # self.peak_rel_start_time_s_array, self.peak_end_time_s_array = peak_boundaries_ns[:,0]/1e9, peak_boundaries_ns[:,1]/1e9
+        # self.peak_start_time_s_array = self.peak_rel_start_time_s_array + self.event_start_time_s
+        # self.peak_end_time_s_array += self.event_start_time_s
+        # self.peak_height_V_array = np.empty(peak_boundaries_sample.shape[0], dtype=float)
+        # self.peak_width_ns_array = np.empty(peak_boundaries_sample.shape[0], dtype=float)
+        # self.peak_area_Vns_array = np.empty(peak_boundaries_sample.shape[0], dtype=float)
+        # peak_area_Vsample_array = np.empty(peak_boundaries_sample.shape[0], dtype=float)
 
-        self.peak_height_V_array = np.empty(peak_boundaries_ns.shape[0], dtype=float)
-        self.peak_width_ns_array = np.empty(peak_boundaries_ns.shape[0], dtype=float)
-        self.peak_area_Vns_array = np.empty(peak_boundaries_ns.shape[0], dtype=float)
-        peak_area_Vsample_array = np.empty(peak_boundaries_ns.shape[0], dtype=float)
+        # avoid overlapping peaks   
+        end_sample_of_previous_peak = 0
+
+        start_sample_list = []
+        end_sample_list = []
+        peak_area_Vsample_list = []
+        peak_height_list = []
 
         for i, peak_boundary in enumerate(peak_boundaries_sample):
             
-            # for area, need to also sum until the baseline, otherwise the area is overestimated
-            # extend_sum_window = extend_sum_window # in samples
-            while (extend_sum_window > 0):
-                start_sample = np.max([peak_boundary[0]-extend_sum_window, 0])
-                end_sample = np.min([peak_boundary[1]+extend_sum_window, len(single_processed_waveform)-1])
-
-                # remove the pair if they are too far from the baseline
-                y_diff = abs(single_processed_waveform[start_sample] - single_processed_waveform[end_sample])
-                if y_diff > threshold_sig*single_baseline_std:
-                    extend_sum_window -= 10
-                else:
-                    break
+            # find the first sample below the baseline before the peak boundary
+            pass_baseline_idx = np.where(single_processed_waveform[peak_boundary[0]::-1] < single_baseline)[0]
+            if len(pass_baseline_idx) > 0:
+                start_sample = peak_boundary[0] - pass_baseline_idx[0]
             else:
-                # if we cannot find a valid window, just use the original peak boundary
-                start_sample = peak_boundary[0]
-                end_sample = peak_boundary[1]
+                start_sample = 0
+            # find the first sample above the baseline after the peak boundary
+            pass_baseline_idx = np.where(single_processed_waveform[peak_boundary[1]:] < single_baseline)[0]
+            if len(pass_baseline_idx) > 0:
+                end_sample = peak_boundary[1] + pass_baseline_idx[0]
+            else:
+                end_sample = len(single_processed_waveform)-1
             
+            # skip if the start sample is before the end sample of the previous peak
+            if start_sample < end_sample_of_previous_peak:
+                continue
+            else:
+                end_sample_of_previous_peak = end_sample              
+                start_sample_list.append(start_sample)
+                end_sample_list.append(end_sample)
+                peak_area_Vsample_list.append(np.sum(single_processed_waveform[start_sample:end_sample]))
+                peak_height_list.append(np.max(single_processed_waveform[start_sample:end_sample]))
 
-            peak_area_Vsample_array[i] = np.sum(single_processed_waveform[start_sample:end_sample])
-            self.peak_height_V_array[i] = np.max(single_processed_waveform[start_sample:end_sample])
-            self.peak_width_ns_array[i] = peak_boundaries_ns[i,1] - peak_boundaries_ns[i,0] 
+        start_sample_array = np.array(start_sample_list, dtype=int)
+        end_sample_array = np.array(end_sample_list, dtype=int)
+        peak_area_Vsample_array = np.array(peak_area_Vsample_list, dtype=float)
+
+        self.peak_height_V_array = np.array(peak_height_list, dtype=float)
+        self.peak_width_ns_array = (end_sample_array - start_sample_array)*4 # in ns, FIXME: this is hardcoded for V1725, 1 sample = 4 ns, get from config
         
-        self.peak_area_Vns_array = peak_area_Vsample_array * 4
+        rel_start_time_s = start_sample_array * 4 / 1e9 # FIXME: this is hardcoded for V1725
+        rel_end_time_s = end_sample_array * 4 / 1e9
+        self.peak_rel_start_time_s_array = rel_start_time_s  # in seconds, assuming the sampling rate is 250 MHz (4 ns per sample)
+        self.peak_start_time_s_array = self.event_start_time_s + rel_start_time_s
+        self.peak_end_time_s_array = self.event_start_time_s + rel_end_time_s  # in seconds, assuming the sampling rate is 250 MHz (4 ns per sample)
+
+        self.peak_area_Vns_array = peak_area_Vsample_array * 4 # FIXME: this is hardcoded for V1725, 1 sample = 4 ns, get from config
+        
         self.peak_area_PE_array = self.peak_area_Vns_array/self.spe_position[0]
 
         self.n_peaks = int(len(self.peak_start_time_s_array))
-
 
         # # convert all arrays to lists for better compatibility with pandas
         # self.peak_start_time_s_array = self.peak_start_time_s_array.tolist()
