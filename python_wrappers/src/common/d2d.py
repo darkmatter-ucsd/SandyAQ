@@ -17,7 +17,8 @@ import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
 from common.logger import setup_logger
-import common.run_info as run_info
+import data_structure.run_info as run_info
+import json
 
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 
@@ -59,16 +60,12 @@ class data():
             
         new_dict = {}
         for column in self.__dict__.keys():
+            new_dict[column] = self.__dict__[column][mask]
             if inplace:
-                self.__dict__[column] = self.__dict__[column][mask]
-            else:
-                new_dict[column] = self.__dict__[column][mask]
+                self.__dict__[column] = new_dict[column]
         
         if not dry:
-            if inplace:
-                logger.info(f"After cut: {len(self)}")
-            else:
-                logger.info(f"After cut: {len(new_dict)}")
+            logger.info(f"After cut: {len(new_dict[column])}")
                 
         if inplace:   
             return
@@ -87,14 +84,55 @@ class data():
             run_info.RunInfo: coverted run_info.RunInfo from
             the row of the df from the d2d.data class
         """
-        
         df = self.get_df()
-        single_run = df.iloc[row].to_dict()
         
+        single_run = df.iloc[row].to_dict()
         RunInfo = run_info.RunInfo()
-        RunInfo.set_run_info_from_dict(single_run)
+        RunInfo.set_info_from_dict(single_run)
             
         return RunInfo
+    
+    def get_row_info_to_dict(self, row: int):
+        """
+        Return run_info.RunInfo from the row of the df from 
+        d2d.data class with a given index or row_id.
+
+        Args:
+            row (int): which row of the df
+
+        Returns:
+            run_info.RunInfo: coverted run_info.RunInfo from
+            the row of the df from the d2d.data class
+        """
+        
+        df = self.get_df()
+        
+        single_run = df.iloc[row].to_dict()
+        
+        for key, value in single_run.items():
+            if isinstance(value, np.ndarray):
+                if len(value) == 1:
+                    single_run[key] = value[0]
+            
+        return single_run
+    
+    def get_common_info_dict(self):
+        """
+        Get the common information from the data structure.
+        
+        Returns:
+            dict: common information from the data structure
+        """
+        common_info = {}
+        for key, value in self.__dict__.items():
+            if isinstance(value, np.ndarray) and not (value.shape): # avoid array(nan)
+                continue
+            if isinstance(value[0], np.ndarray):
+                # convert each row to string
+                value = np.array([json.dumps(x.tolist()) for x in value])
+            if len(np.unique(value)) == 1:
+                common_info[key] = value[0]
+        return common_info
     
     def __len__(self):
         # the length of all array should be the same
