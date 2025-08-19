@@ -4,6 +4,8 @@ This wrapper is used to take single channel calibration data. It does the follow
 - run calibration runs with sandyaq
 - run sandyaq to take data according to the temp config file
 - write the user inputs as metadata 
+
+### FIXME: add post trigger setting like in the all-channel mode.
 """
 
 import os
