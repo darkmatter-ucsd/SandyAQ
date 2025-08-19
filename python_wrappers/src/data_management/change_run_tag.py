@@ -1,7 +1,7 @@
 '''
 This is a tool to change the tag of a run to other tags, e.g. "trash"
 
-!!!!! Not tested yet !!!!!
+!!!!! Absolutely not finished !!!!!
 
 '''
 
@@ -12,6 +12,7 @@ import re
 import numpy as np
 import sys
 import datetime
+import argparse
 
 def _get_data_files(data_directories, pattern="meta_config*.json"):
     """
@@ -79,8 +80,6 @@ def gen_new_metadata_w_updated_tags(data_folders, remove_run_tag, add_run_tag):
         
         # checking the flags:
         
-        
-        
         new_meta_data["run_tag"] = str("fill_in_your_tag")
 
         new_file_name = os.path.join(dir_name[i], f"new_{file_name[i]}")
@@ -99,10 +98,18 @@ def replace_old_metadata_w_new_metadata(new_metadata_files):
     # rename the "new_meta_config_..." to "meta_config_..."
     print(f"Renaming {new_metadata_files} to {existing_data_file}")
     os.rename(new_metadata_files, existing_data_file)
-        
-def main():
-    
     
 
 if __name__ == "__main__":
-    main()
+    # set arguments to variables from user input
+
+    parser = argparse.ArgumentParser(description="Change run tag")
+    parser.add_argument('--data_folders', type=str, default="LXe/gain_calibration", help='Run tag to filter the runs.')
+    parser.add_argument('--remove_run_tag', type=str, default="LXe/gain_calibration", help='Run tag to remove from the runs.')
+    parser.add_argument('--add_run_tag', type=str, default="LXe/gain_calibration", help='Run tag to add to the runs.')
+
+    args = parser.parse_args()
+
+
+    gen_new_metadata_w_updated_tags(args.data_folders, args.remove_run_tag, args.add_run_tag)
+    replace_old_metadata_w_new_metadata()

@@ -13,7 +13,6 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
 import common.run_info as run_info
-import data_processing.event_processor as event_processor
 import common.config_reader as common_config_reader
 import common.metadata_handler as metadata_handler
 from common.logger import setup_logger
