@@ -7,58 +7,9 @@ sys.path.insert(0,os.path.join(current_dir,"./"))
 # from event_info import EventInfo
 from run_info import RunInfo
 from numba import njit
+from matplotlib import pyplot as plt
+from collections.abc import Iterable
 
-@njit
-def delete_workaround(arr, num):
-    mask = np.zeros(arr.shape[0], dtype=np.int64) == 0
-    mask[np.where(arr == num)[0]] = False
-    return arr[mask]
-
-@njit
-def _set_peaks_for_single_processed_waveform(
-        single_processed_waveform, 
-        single_baseline, 
-        single_baseline_std, 
-        threshold_sig=3):
-    
-    window_size = 6
-    threshold_sig = threshold_sig
-    min_peak_width_sample = window_size*3
-
-    smooth_waveform = np.convolve(
-        single_processed_waveform, 
-        np.ones(window_size)/window_size, mode='valid')
-
-    # recalculated the baseline for the smoothed waveform
-    threshold = single_baseline + threshold_sig * single_baseline_std
-
-    # applying the threshold to find peaks
-    mask = smooth_waveform > threshold
-
-    # mark the start and end of the peaks
-    diff = np.diff(mask)
-
-    samples_above_threshold = np.where(diff == 1)[0]
-    # start samples_above_threshold are the samples_above_threshold after the rising edge
-    # samples_above_threshold[0::2] = samples_above_threshold[0::2]+1 
-    samples_above_threshold[1::2] = samples_above_threshold[1::2] + window_size
-
-    # remove the last point if it's odd
-    if len(samples_above_threshold) % 2 != 0:
-        samples_above_threshold = samples_above_threshold[:-1]  
-        
-    # reshape the points into pairs for better handling
-    peak_boundaries = samples_above_threshold.reshape(-1, 2)
-
-    # remove the pair if they are too close to each other
-    peak_width = peak_boundaries[:,1] - peak_boundaries[:,0]
-    # peak_width = np.repeat(peak_width, 2).reshape(peak_boundaries.shape)
-    tmp = np.where(peak_width < min_peak_width_sample)
-
-    mask = peak_width > min_peak_width_sample
-    peak_boundaries = peak_boundaries[mask,:]
-
-    return peak_boundaries
 
 class WaveformInfo(RunInfo):
     '''
@@ -70,25 +21,6 @@ class WaveformInfo(RunInfo):
     For other classes inheriting this class can add more attributes, such as fast_processor
     or metadata_handler
     '''
-    
-    #     self.PeakInfoList = []
-    
-    # def add_peak_info(self, peak_info):
-    #     if not isinstance(peak_info, PeakInfo):
-    #         raise TypeError("Expected a PeakInfo instance")
-    #     self.PeakInfoList.append(peak_info)
-
-    # def set_peak_info_array(self):
-    #     if not self.PeakInfoList:
-    #         raise ValueError("No PeakInfo instances to set")
-        
-    #     start_time_array = np.concatenate([peak.start_time_array for peak in self.PeakInfoList])
-    #     end_time_array = np.concatenate([peak.end_time_array for peak in self.PeakInfoList])
-    #     peak_max_array = np.concatenate([peak.peak_max_array for peak in self.PeakInfoList])
-    #     area_array = np.concatenate([peak.area_array for peak in self.PeakInfoList])
-        
-    #     return PeakInfo(start_time_array, end_time_array, peak_max_array, area_array)
-
 
     def __init__(self):
 
@@ -106,15 +38,6 @@ class WaveformInfo(RunInfo):
         # self.baseline_V: float = np.nan
 
         # peak level information
-        # self.peak_start_time_s: float = np.nan  # seconds since run start time
-        # self.peak_end_time_s: float = np.nan  # seconds since run start time
-        # self.peak_rel_start_time: float = np.nan  # seconds since run start time
-        
-        # self.peak_height_V: float = np.nan
-        # self.peak_width_ns: float = np.nan
-        # self.peak_area_Vns: float = np.nan
-        # self.peak_area_PE: float = np.nan
-
         self.n_peaks: int = np.nan
 
         self.peak_start_time_s_array = np.array([], dtype=float)  # seconds since run start time
@@ -126,30 +49,6 @@ class WaveformInfo(RunInfo):
         self.peak_area_Vns_array = np.array([], dtype=float)
         self.peak_area_PE_array = np.array([], dtype=float)
 
-        # self.peak_start_time_s_array = [0.1]  # seconds since run start time
-        # self.peak_end_time_s_array = [0.1]  # seconds since run start time
-        # self.peak_rel_start_time_s_array = [0.1]  # seconds since run start time
-
-        # self.peak_height_V_array = [0.1]  # peak height in Volts
-        # self.peak_width_ns_array = [0.1]  # peak width in nanoseconds
-        # self.peak_area_Vns_array = [0.1]  # peak area in Volts * nan
-        # self.peak_area_PE_array = [0.1]  # peak area in PE (photoelectrons)
-
-    # def set_result(self, start_time_array_s, end_time_array_s, height_array_V, area_array_Vns, width_array_ns):
-    #     """
-    #     Set the result of the peak information.
-
-    #     Args:
-    #         start_time_array (np.ndarray): Array of start times of peaks.
-    #         end_time_array (np.ndarray): Array of end times of peaks.
-    #         peak_max_array (np.ndarray): Array of maximum values of peaks.
-    #         area_array (np.ndarray): Array of area values of peaks.
-    #     """
-    #     self.peak_start_time_s_array = start_time_array_s
-    #     self.peak_end_time_s_array = end_time_array_s
-    #     self.peak_height_V_array = height_array_V
-    #     self.peak_area_unit_array = area_array_Vns
-    #     self.peak_width_unit_array = width_array_ns
 
     # @njit
     def set_peaks_for_single_processed_waveform(
@@ -157,8 +56,10 @@ class WaveformInfo(RunInfo):
             single_baseline, 
             single_baseline_std, 
             threshold_sig=1, 
-            extend_sum_window=30,
-            event_id=None):
+            event_id=None,
+            peak_merge_window_sample = 250, # samples
+            show_plot = False,
+            ):
         
         window_size = 6
         min_peak_width_sample = window_size*3
@@ -190,43 +91,50 @@ class WaveformInfo(RunInfo):
         # reshape the points into pairs for better handling
         peak_boundaries_sample = samples_above_threshold.reshape(-1, 2)
 
-        # remove the pair if they are too close to each other
+        # remove narrow peaks
         peak_width = peak_boundaries_sample[:,1] - peak_boundaries_sample[:,0]
-        # peak_width = np.repeat(peak_width, 2).reshape(peak_boundaries_sample.shape)
         tmp = np.where(peak_width < min_peak_width_sample)
-
         mask = peak_width > min_peak_width_sample
         peak_boundaries_sample = peak_boundaries_sample[mask,:]
 
         
+        # merge peaks within the peak_merge_window
+        ### FIXME: it is a wrong implementation
+        ### current version is merging only: peak_{j,start} - peak_{i, start} < peak_merge_window_sample for all j > i
+        ### correct version should merge: peak_{i+1,end} - peak_{i, start} < peak_merge_window_sample
+        ### therefore the following implementation is wrong and has to be changed.
+
+        n_peaks = len(peak_boundaries_sample)
+
+        for iterations in np.arange(0, n_peaks-1):
+            if len(peak_boundaries_sample) < 2:
+                break
+
+            if len(peak_boundaries_sample) <= iterations + 1:
+                break
+
+            peak_window_boundary = peak_boundaries_sample[iterations,0] + peak_merge_window_sample
+            idxs = np.where(peak_boundaries_sample[iterations + 1:,0] < peak_window_boundary)[0] # idxs is shifted by 1 due to the slicing
+            if len(idxs) > 0:
+                end_boundary = peak_boundaries_sample[iterations + 1 + idxs[-1],1]
+                peak_boundaries_sample = np.delete(peak_boundaries_sample, idxs+1, axis=0)
+                peak_boundaries_sample[iterations,1] = end_boundary
+        
         # results
         if peak_boundaries_sample.shape[0] == 0:
-            # self.peak_start_time_s_array = []
-            # self.peak_end_time_s_array = []
-            # self.peak_height_V_array = []
-            # self.peak_width_ns_array = []
-            # self.peak_area_Vns_array = []
-            # self.peak_area_PE_array = []
-            # self.peak_start_time_s_array = np.array([], dtype=float)
-            # self.peak_end_time_s_array = np.array([], dtype=float)
-            # self.peak_height_V_array = np.array([], dtype=float)
-            # self.peak_width_ns_array = np.array([], dtype=float)
-            # self.peak_area_Vns_array = np.array([], dtype=float)
-            # self.peak_area_PE_array = np.array([], dtype=float)
             self.n_peaks = 0
+
+            self.peak_start_time_s_array = np.array([], dtype=float)  # seconds since run start time
+            self.peak_end_time_s_array = np.array([], dtype=float)  # seconds since run start time
+            self.peak_rel_start_time_s_array = np.array([], dtype=float)  # seconds since run start time
+            
+            self.peak_height_V_array = np.array([], dtype=float)
+            self.peak_width_ns_array = np.array([], dtype=float)
+            self.peak_area_Vns_array = np.array([], dtype=float)
+            self.peak_area_PE_array = np.array([], dtype=float)
             return
         
-        # peak_boundaries_ns = peak_boundaries_sample * 4 # in ns, assuming the sampling rate is 250 MHz (4 ns per sample)
-        
-        # self.peak_rel_start_time_s_array, self.peak_end_time_s_array = peak_boundaries_ns[:,0]/1e9, peak_boundaries_ns[:,1]/1e9
-        # self.peak_start_time_s_array = self.peak_rel_start_time_s_array + self.event_start_time_s
-        # self.peak_end_time_s_array += self.event_start_time_s
-        # self.peak_height_V_array = np.empty(peak_boundaries_sample.shape[0], dtype=float)
-        # self.peak_width_ns_array = np.empty(peak_boundaries_sample.shape[0], dtype=float)
-        # self.peak_area_Vns_array = np.empty(peak_boundaries_sample.shape[0], dtype=float)
-        # peak_area_Vsample_array = np.empty(peak_boundaries_sample.shape[0], dtype=float)
-
-        # avoid overlapping peaks   
+        # go to baseline   
         end_sample_of_previous_peak = 0
 
         start_sample_list = []
@@ -249,7 +157,7 @@ class WaveformInfo(RunInfo):
             else:
                 end_sample = len(single_processed_waveform)-1
             
-            # skip if the start sample is before the end sample of the previous peak
+            # skip if the start sample is before the end sample of the previous peak (ie overlapping peaks)
             if start_sample < end_sample_of_previous_peak:
                 continue
             else:
@@ -274,9 +182,28 @@ class WaveformInfo(RunInfo):
 
         self.peak_area_Vns_array = peak_area_Vsample_array * 4 # FIXME: this is hardcoded for V1725, 1 sample = 4 ns, get from config
         
-        self.peak_area_PE_array = self.peak_area_Vns_array/self.spe_position[0]
+        if isinstance(self.spe_position, Iterable):
+            self.peak_area_PE_array = self.peak_area_Vns_array/self.spe_position[0]
+        else:
+            self.peak_area_PE_array = self.peak_area_Vns_array/self.spe_position
 
         self.n_peaks = int(len(self.peak_start_time_s_array))
+
+        if show_plot:
+            plt.close('all')
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(single_processed_waveform, label='filtered waveform')
+            ax.axhline(single_baseline, color='green', linestyle='dashdot', label='baseline')
+            ax.axhline(peak_threshold, color='black', linestyle='--', label='threshold')
+            for start, end, peak_area_PE in zip(start_sample_list, end_sample_list, self.peak_area_PE_array):
+                ax.fill_between(np.arange(start, end),
+                    single_processed_waveform[start:end],
+                      alpha=0.5, label=f"area = {peak_area_PE:.1f} PE")
+            plt.title(f'Event ID: {event_id}')
+            plt.xlabel('Sample')
+            plt.ylabel('Amplitude (V)')
+            plt.legend()
+            plt.show()
 
         # # convert all arrays to lists for better compatibility with pandas
         # self.peak_start_time_s_array = self.peak_start_time_s_array.tolist()
@@ -286,17 +213,30 @@ class WaveformInfo(RunInfo):
         # self.peak_area_Vns_array = self.peak_area_Vns_array.tolist()
         # self.peak_area_PE_array = self.peak_area_PE_array.tolist()
 
-        if (self.post_trigger is not None) & (self.record_length_sample is not None):
-            tmp_start = 1-self.post_trigger/100.0-0.1 # 0.1 is to avoid the edge effect
+        # convert data types for better compatibility with pandas
+        if isinstance(self.post_trigger, Iterable):
+            post_trigger = self.post_trigger[0]
+        else:
+            post_trigger = self.post_trigger
+
+        if isinstance(self.record_length_sample, Iterable):
+            record_length_sample = self.record_length_sample[0]
+        else:
+            record_length_sample = self.record_length_sample
+
+        if isinstance(post_trigger,float) & isinstance(record_length_sample, (int, np.integer)):
+            tmp_start = 1-post_trigger/100.0-0.1 # 0.1 is to avoid the edge effect
             self.integral_window = (tmp_start, tmp_start+0.25)
 
-            sum_start = int(self.record_length_sample * self.integral_window[0])
-            sum_end = int(self.record_length_sample * self.integral_window[1])
+            sum_start = int(record_length_sample * self.integral_window[0])
+            sum_end = int(record_length_sample * self.integral_window[1])
 
             areas_Vsamples = np.sum(single_processed_waveform[sum_start:sum_end])
             self.integral_window_area_Vns = 4 * areas_Vsamples # now it becomes V * ns (for V1725, 1 sample = 4 ns)
             self.integral_window_area_PE = self.integral_window_area_Vns / self.spe_position
             self.integral_window_height_V = np.max(single_processed_waveform[sum_start:sum_end])
+        else:
+            raise ValueError("post_trigger and record_length_sample must be set to calculate integral_window_area_Vns and integral_window_height_V")
 
         return
     

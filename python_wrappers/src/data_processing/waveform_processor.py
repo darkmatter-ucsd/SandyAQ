@@ -197,7 +197,7 @@ class WFProcessor(object):
 
         return sum_start_idx_array, sum_end_idx_array
     
-    def get_area(self,sum_window=(0.4,0.6), consecutive_samples=3, threshold_sig=5):
+    def get_area(self,sum_window=(0.4,0.6)):
         """
         Return the area of the waveform in the sum window
         Unit: V * ns

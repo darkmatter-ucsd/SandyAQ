@@ -9,6 +9,49 @@ import os
 import pandas as pd
 import re
 
+def get_new_filename(fname: str, use_datetime: bool = False) -> str:
+    """
+    Generate a new filename based on the given pathname, extension, and basename_front.
+    If the file already exists, it appends a count to the basename.
+
+    Parameters:
+    - fname: str, the full path of the original file
+
+    Returns:
+    - str: the full path of the new filename
+    """
+    count = 0
+
+    basename = os.path.basename(fname).split(".")[0]
+    dirname = os.path.dirname(fname)
+    extension = fname.split(".")[-1]
+
+    while os.path.exists(fname): 
+
+        # append with current time
+        if use_datetime:
+            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            fname = os.path.join(dirname, f"{basename}_{current_time}.{extension}")
+
+        else:
+            # append files with increasing int
+            try: 
+                count = int(basename.split("_")[-1]) + 1
+                basename_front = "_".join(basename.split("_")[:-1])
+
+            except ValueError:
+                count = 1
+                basename_front = basename
+
+            fname = os.path.join(dirname, f"{basename_front}_{count}.{extension}")
+
+            count += 1
+            if count > 50:  # Prevent infinite loop in case of an error
+                raise RuntimeError(f"Too many files with the same name: {fname}. Please check your code.")
+
+    return(fname)
+
+
 def mask_nd(x, m):
     '''
     from https://stackoverflow.com/questions/53918392/mask-2d-array-preserving-shape

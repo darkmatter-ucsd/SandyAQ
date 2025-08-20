@@ -17,12 +17,12 @@ import sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
 from common.logger import setup_logger
-import common.run_info as run_info
+from data_structure.run_info import RunInfo
 
 # logger = setup_logger(__name__)
 logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 
-class MetadataHandler(run_info.RunInfo):
+class MetadataHandler(RunInfo):
     
     """
     A class to handle metadata information of a single bin or JSON file.
@@ -259,8 +259,11 @@ class MetadataHandler(run_info.RunInfo):
             if _tmp != None:
                 assert int(self.threshold_adc) == self.threshold_adc
 
-            _tmp = list(range(0, 24))
-            self.channel_list = _tmp
+            _tmp = meta_data.get("channel_list")
+            if _tmp != None:
+                self.channel_list = _tmp
+            else:
+                self.channel_list = list(range(0, 24))
                 
         elif self.data_taking_mode == "all_channels":
 
@@ -323,7 +326,7 @@ class MetadataHandler(run_info.RunInfo):
                                 f"_board_{self.board}.bin"
             self.bin_dir_path = self.md_dir_path
             self.bin_full_path = os.path.join(self.bin_dir_path, self.bin_base_name)
-            self.bin_full_path_list = None
+            self.bin_full_path_list = [self.bin_full_path]
 
             # self.check_path(self.bin_full_path, extension=".bin")
             

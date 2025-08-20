@@ -168,8 +168,6 @@ class GainProcessor:
                 single_baseline, 
                 single_baseline_std,
                 threshold_sig=5, 
-                extend_sum_window=50,
-                # event_id=event_id
             )
 
             for peak_id in range(int(waveform_info.n_peaks)):
