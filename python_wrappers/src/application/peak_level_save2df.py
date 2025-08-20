@@ -21,6 +21,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
 import common.d2d as d2d
 import common.utils as util
+import common.config_reader as common_config_reader
 import data_processing.fast_processor_all_channel as fast_processor
 from data_processing.event_processor_all_channel import EventProcessor
 from common.logger import setup_logger
@@ -29,210 +30,188 @@ logger = setup_logger(os.path.splitext(os.path.basename(__file__))[0])
 from data_structure.waveform_info import WaveformInfo
 from data_structure.peak_info import PeakInfo
 
-def get_baseline_for_all_events(waveform, baseline_front=(0.0,0.2)):
-    baseline_start_f = int(1000 * baseline_front[0])
-    baseline_end_f = int(1000 * baseline_front[1])
 
-    # baseline is calculated with raw waveform
-    # unit: same as raw waveform
-    baseline_mean_V = np.mean(waveform[:,baseline_start_f:baseline_end_f], axis=1)
-    baseline_std_V = np.std(waveform[:,baseline_start_f:baseline_end_f], axis=1)
+class Peak_Processor:
+    def __init__(self):
+        self.common_cfg_reader = common_config_reader.ConfigurationReader()
+        self.path_config = self.common_cfg_reader.get_absolute_path_config()
+        self.peak_list_input_file = self.path_config.get('PEAK_ANALYSIS', 'peak_list_input_file')
+        self.average_SPE_input_file = self.path_config.get('PEAK_ANALYSIS', 'average_SPE_input_file')
+        self.peak_list_output_dirname = self.path_config.get('PEAK_ANALYSIS', 'peak_list_output_dirname')
 
-    return baseline_mean_V, baseline_std_V
+    def get_baseline_for_all_events(self, waveform, baseline_front=(0.0,0.2)):
+        baseline_start_f = int(1000 * baseline_front[0])
+        baseline_end_f = int(1000 * baseline_front[1])
 
+        # baseline is calculated with raw waveform
+        # unit: same as raw waveform
+        baseline_mean_V = np.mean(waveform[:,baseline_start_f:baseline_end_f], axis=1)
+        baseline_std_V = np.std(waveform[:,baseline_start_f:baseline_end_f], axis=1)
 
-def rolling_window(array: np.ndarray, window_size:int, axis:int) -> np.ndarray:
-    """
-    Rolls a 1D array into a 2D array with a sliding window view.
-    Args:
-        array (np.ndarray): The input 1D array to be rolled.
-        window_size (int): The size of the rolling window.
-        axis (int): The axis along which to roll the array.
-    Returns:
-        np.ndarray: A 2D array where each row corresponds to a window of the original array.
-    """
-    ndim = array.ndim
+        return baseline_mean_V, baseline_std_V
 
-    if not isinstance(array, np.ndarray):
-        raise ValueError("Input must be a numpy array.")
-    if axis > ndim - 1 or axis < 0:
-        raise ValueError("Axis must be within the range of the array dimensions.")
-    if not isinstance(window_size, int) or window_size <= 0 or window_size > array.shape[axis]:
-        raise ValueError("Window size must be a positive integer.")
-    
-    # n.dim rolling window
-    # expand array according to the rolling window
-    expanded_array = np.lib.stride_tricks.sliding_window_view(array, window_size, axis=axis)
-    # take the mean along the new dimension for the result
-    roll_averaged_array = expanded_array.mean(axis=ndim) 
+    def get_board_channel(self, SiPM_channel: int, board_0_channels: np.array, board_1_channels: np.array) -> int:
+        if SiPM_channel in board_0_channels: 
+            board_channel = np.where(board_0_channels == SiPM_channel)[0]
+        elif SiPM_channel in board_1_channels:  
+            board_channel = np.where(board_1_channels == SiPM_channel)[0]
+        else:
+            raise ValueError(f"SiPM channel {SiPM_channel} not found in both boards.")
 
-    # roll_averaged_array = np.convolve(array, np.ones(window_size)/window_size, mode='valid')
+        return board_channel[0]
 
 
-    return roll_averaged_array
+    def set_peak_info_from_waveform_info(self, waveform_info: WaveformInfo):
+        peak_info = PeakInfo()
+        peak_info.set_info_from_dict(waveform_info.__dict__)
+
+        # PeakInfo_df = pd.DataFrame(columns=peak_info.__dict__.keys())
+        peak_info_list = []
+
+        if waveform_info.n_peaks == 0:
+            # return PeakInfo_df
+            return peak_info_list
+
+        for peak_id in range(int(waveform_info.n_peaks)):
+            peak_info.peak_id = peak_id
+            peak_info.peak_start_time_s = waveform_info.peak_start_time_s_array[peak_id]
+            peak_info.peak_end_time_s = waveform_info.peak_end_time_s_array[peak_id]
+            peak_info.peak_rel_start_time_s = waveform_info.peak_rel_start_time_s_array[peak_id]
+            peak_info.peak_height_V = waveform_info.peak_height_V_array[peak_id]
+            peak_info.peak_width_ns = waveform_info.peak_width_ns_array[peak_id]
+            peak_info.peak_area_Vns = waveform_info.peak_area_Vns_array[peak_id]
+            peak_info.peak_area_PE = waveform_info.peak_area_PE_array[peak_id]
+
+            tmp  = deepcopy(peak_info.__dict__)
+            # PeakInfo_df = PeakInfo_df.append(tmp, ignore_index=True)
+            # peak_info_list.append(tmp)
+            # peak_info_list += [pd.DataFrame(tmp, index = [0])]
+            peak_info_list += [tmp]
 
 
-def get_board_channel(SiPM_channel: int, board_0_channels: np.array, board_1_channels: np.array) -> int:
-    if SiPM_channel in board_0_channels: 
-        board_channel = np.where(board_0_channels == SiPM_channel)[0]
-    elif SiPM_channel in board_1_channels:  
-        board_channel = np.where(board_1_channels == SiPM_channel)[0]
-    else:
-        raise ValueError(f"SiPM channel {SiPM_channel} not found in both boards.")
-
-    return board_channel[0]
-
-
-def set_peak_info_from_waveform_info(waveform_info: WaveformInfo):
-    peak_info = PeakInfo()
-    peak_info.set_info_from_dict(waveform_info.__dict__)
-
-    # PeakInfo_df = pd.DataFrame(columns=peak_info.__dict__.keys())
-    peak_info_list = []
-
-    if waveform_info.n_peaks == 0:
-        # return PeakInfo_df
         return peak_info_list
 
-    for peak_id in range(int(waveform_info.n_peaks)):
-        peak_info.peak_id = peak_id
-        peak_info.peak_start_time_s = waveform_info.peak_start_time_s_array[peak_id]
-        peak_info.peak_end_time_s = waveform_info.peak_end_time_s_array[peak_id]
-        peak_info.peak_rel_start_time_s = waveform_info.peak_rel_start_time_s_array[peak_id]
-        peak_info.peak_height_V = waveform_info.peak_height_V_array[peak_id]
-        peak_info.peak_width_ns = waveform_info.peak_width_ns_array[peak_id]
-        peak_info.peak_area_Vns = waveform_info.peak_area_Vns_array[peak_id]
-        peak_info.peak_area_PE = waveform_info.peak_area_PE_array[peak_id]
 
-        tmp  = deepcopy(peak_info.__dict__)
-        # PeakInfo_df = PeakInfo_df.append(tmp, ignore_index=True)
-        # peak_info_list.append(tmp)
-        # peak_info_list += [pd.DataFrame(tmp, index = [0])]
-        peak_info_list += [tmp]
+    def get_peak_level_data(self, 
+            all_runs_d2d: d2d.data,
+            md_full_path: str,
+            peak_merge_window_sample: int):
 
+        single_info = WaveformInfo()
 
-    return peak_info_list
-
-
-def get_peak_level_data(all_runs_d2d: d2d.data,
-                        md_full_path: str,
-                        peak_merge_window_sample: int):
-    
-    single_info = WaveformInfo()
-
-    peak_info = PeakInfo()
-    peak_info_all = []
-    # peak_info_all = pd.DataFrame(columns=peak_info.__dict__.keys())
-    
-    mask = all_runs_d2d.md_full_path == md_full_path
-    single_run = all_runs_d2d.apply_mask(mask, inplace=False, dry = False)
-
-    assert len(single_run.channel) == 24, f"Run {md_full_path} has {len(single_run.channel)} channels, expected 24 channels."
-    
-    t1,t2,t3, t4 = 0, 0, 0, 0
-
-    for board_id in np.unique(single_run.board):
+        peak_info = PeakInfo()
+        peak_info_all = []
+        # peak_info_all = pd.DataFrame(columns=peak_info.__dict__.keys())
         
-        mask = single_run.board == board_id
-        single_board = single_run.apply_mask(mask, inplace=False, dry = True)
+        mask = all_runs_d2d.md_full_path == md_full_path
+        single_run = all_runs_d2d.apply_mask(mask, inplace=False, dry = False)
 
-        board_info = WaveformInfo()
-        board_info.set_info_from_dict(single_board.get_common_info_dict())
-        board_info.board_0_channels = np.array(json.loads(board_info.board_0_channels))
-        board_info.board_1_channels = np.array(json.loads(board_info.board_1_channels))
+        assert len(single_run.channel) == 24, f"Run {md_full_path} has {len(single_run.channel)} channels, expected 24 channels."
+        
+        t1,t2,t3, t4 = 0, 0, 0, 0
 
-        # convert string to array
-        if isinstance(board_info.board_0_channels[0], str):
-            board_info.board_0_channels = board_info.board_0_channels.apply(json.loads).apply(np.array)
-        if isinstance(board_info.board_1_channels[0], str):
-            board_info.board_1_channels = board_info.board_1_channels.apply(json.loads).apply(np.array)
+        for board_id in np.unique(single_run.board):
+            
+            mask = single_run.board == board_id
+            single_board = single_run.apply_mask(mask, inplace=False, dry = True)
 
-        if isinstance(board_info.board_0_channels[0], str):
-            if "," in board_info.board_0_channels[0]:
+            board_info = WaveformInfo()
+            board_info.set_info_from_dict(single_board.get_common_info_dict())
+            board_info.board_0_channels = np.array(json.loads(board_info.board_0_channels))
+            board_info.board_1_channels = np.array(json.loads(board_info.board_1_channels))
+
+            # convert string to array
+            if isinstance(board_info.board_0_channels[0], str):
                 board_info.board_0_channels = board_info.board_0_channels.apply(json.loads).apply(np.array)
-            else:
-                board_info.board_0_channels = board_info.board_0_channels.apply(lambda x: x.replace("  ", ","))
-                board_info.board_0_channels = board_info.board_0_channels.apply(lambda x: x.replace("[ ", "["))
-                board_info.board_0_channels = board_info.board_0_channels.apply(lambda x: x.replace(" ", ","))
-                board_info.board_0_channels = board_info.board_0_channels.apply(json.loads).apply(np.array)
-
-                board_info.board_1_channels = board_info.board_1_channels.apply(lambda x: x.replace("  ", ","))
-                board_info.board_1_channels = board_info.board_1_channels.apply(lambda x: x.replace("[ ", "["))
-                board_info.board_1_channels = board_info.board_1_channels.apply(lambda x: x.replace(" ", ","))
+            if isinstance(board_info.board_1_channels[0], str):
                 board_info.board_1_channels = board_info.board_1_channels.apply(json.loads).apply(np.array)
+
+            if isinstance(board_info.board_0_channels[0], str):
+                if "," in board_info.board_0_channels[0]:
+                    board_info.board_0_channels = board_info.board_0_channels.apply(json.loads).apply(np.array)
+                else:
+                    board_info.board_0_channels = board_info.board_0_channels.apply(lambda x: x.replace("  ", ","))
+                    board_info.board_0_channels = board_info.board_0_channels.apply(lambda x: x.replace("[ ", "["))
+                    board_info.board_0_channels = board_info.board_0_channels.apply(lambda x: x.replace(" ", ","))
+                    board_info.board_0_channels = board_info.board_0_channels.apply(json.loads).apply(np.array)
+
+                    board_info.board_1_channels = board_info.board_1_channels.apply(lambda x: x.replace("  ", ","))
+                    board_info.board_1_channels = board_info.board_1_channels.apply(lambda x: x.replace("[ ", "["))
+                    board_info.board_1_channels = board_info.board_1_channels.apply(lambda x: x.replace(" ", ","))
+                    board_info.board_1_channels = board_info.board_1_channels.apply(json.loads).apply(np.array)
+                    
+
+            # single_info.set_info_from_dict(board_info)
+            event_processor = EventProcessor(board_info)
+            
+            if board_id == 0:
+                channel_list = board_info.board_0_channels
+            else:
+                channel_list = board_info.board_1_channels
+
+
+            for channel_id in range(len(channel_list)):
+                mask = (single_run.board == board_id) & (single_run.channel == channel_list[channel_id])
+                single_channel = single_run.apply_mask(mask, inplace=False, dry = True)
                 
+                assert len(single_channel.channel) == 1, f"Channel {channel_id} in board {board_id} has {len(single_channel.channel)} channels, expected 1 channel."
+                
+                single_info.set_info_from_dict(single_channel.get_dict())
+                board_channel = self.get_board_channel(channel_id, board_info.board_0_channels, board_info.board_1_channels)
 
-        # single_info.set_info_from_dict(board_info)
-        event_processor = EventProcessor(board_info)
+                waveform_processor = event_processor.get_waveform_processor(board_channel)
+                waveform = waveform_processor.filtered_wfs
+
+                baseline, baseline_std = self.get_baseline_for_all_events(waveform)
+
+                # print(f"Processing board {single_info.board}, channel {single_info.channel} in run {single_info.md_full_path}")
+
+                for event_id in range(waveform.shape[0]):
+                    single_waveform = waveform[event_id,:]
+                    single_baseline, single_baseline_std = baseline[event_id], baseline_std[event_id]
+
+                    single_info.event_start_time_s = waveform_processor.event_time_s[event_id]
+                    single_info.event_id = event_id
+                    # print(f"Processing event {single_info.event_id} in run {single_info.md_full_path}, board {single_info.board}, channel {single_info.channel}")
+
+                    t0 = time.perf_counter()
+                    single_info.set_peaks_for_single_processed_waveform(
+                        single_waveform, 
+                        single_baseline, 
+                        single_baseline_std,
+                        threshold_sig=3, 
+                        peak_merge_window_sample=peak_merge_window_sample
+                        # event_id=event_id
+                    )
+                    t1 += time.perf_counter() - t0              
+
+                    t0 = time.perf_counter()
+                    # peak_info_list = set_peak_info_from_waveform_info(single_info)
+                    t2 += time.perf_counter() - t0              
+
+                    t0 = time.perf_counter()
+                    peak_info_all += self.set_peak_info_from_waveform_info(single_info)
+                    t3 += time.perf_counter() - t0
+
+        print(f'Time taken: {t1:.6f} seconds for peak finding, '
+            f'{t2:.6f} seconds for peak info setting, '
+            f'{t3:.6f} seconds for appending peak info list')
+
+        return (peak_info_all, waveform, baseline, baseline_std)
+
+
+    def get_waveform_from_single_info(self, single_info):
         
-        if board_id == 0:
-            channel_list = board_info.board_0_channels
-        else:
-            channel_list = board_info.board_1_channels
+        # assert len(single_info.channel) == 1, f"Expected 1 channel."
+        event_processor = EventProcessor(single_info)
+                
+        board_channel = self.get_board_channel(single_info.channel, single_info.board_0_channels, single_info.board_1_channels)
 
+        waveform_processor = event_processor.get_waveform_processor(board_channel)
+        waveform = waveform_processor.filtered_wfs
+        baseline, baseline_std = self.get_baseline_for_all_events(waveform)
 
-        for channel_id in range(len(channel_list)):
-            mask = (single_run.board == board_id) & (single_run.channel == channel_list[channel_id])
-            single_channel = single_run.apply_mask(mask, inplace=False, dry = True)
-            
-            assert len(single_channel.channel) == 1, f"Channel {channel_id} in board {board_id} has {len(single_channel.channel)} channels, expected 1 channel."
-            
-            single_info.set_info_from_dict(single_channel.get_dict())
-            board_channel = get_board_channel(channel_id, board_info.board_0_channels, board_info.board_1_channels)
-
-            waveform_processor = event_processor.get_waveform_processor(board_channel)
-            waveform = waveform_processor.filtered_wfs
-
-            baseline, baseline_std = get_baseline_for_all_events(waveform)
-
-            # print(f"Processing board {single_info.board}, channel {single_info.channel} in run {single_info.md_full_path}")
-
-            for event_id in range(waveform.shape[0]):
-                single_waveform = waveform[event_id,:]
-                single_baseline, single_baseline_std = baseline[event_id], baseline_std[event_id]
-
-                single_info.event_start_time_s = waveform_processor.event_time_s[event_id]
-                single_info.event_id = event_id
-                # print(f"Processing event {single_info.event_id} in run {single_info.md_full_path}, board {single_info.board}, channel {single_info.channel}")
-
-                t0 = time.perf_counter()
-                single_info.set_peaks_for_single_processed_waveform(
-                    single_waveform, 
-                    single_baseline, 
-                    single_baseline_std,
-                    threshold_sig=3, 
-                    peak_merge_window_sample=peak_merge_window_sample
-                    # event_id=event_id
-                )
-                t1 += time.perf_counter() - t0              
-
-                t0 = time.perf_counter()
-                # peak_info_list = set_peak_info_from_waveform_info(single_info)
-                t2 += time.perf_counter() - t0              
-
-                t0 = time.perf_counter()
-                peak_info_all += set_peak_info_from_waveform_info(single_info)
-                t3 += time.perf_counter() - t0
-
-    print(f'Time taken: {t1:.6f} seconds for peak finding, '
-          f'{t2:.6f} seconds for peak info setting, '
-          f'{t3:.6f} seconds for appending peak info list')
-
-    return (peak_info_all, waveform, baseline, baseline_std)
-
-
-def get_waveform_from_single_info(single_info):
-    
-    # assert len(single_info.channel) == 1, f"Expected 1 channel."
-    event_processor = EventProcessor(single_info)
-            
-    board_channel = get_board_channel(single_info.channel, single_info.board_0_channels, single_info.board_1_channels)
-
-    waveform_processor = event_processor.get_waveform_processor(board_channel)
-    waveform = waveform_processor.filtered_wfs
-    baseline, baseline_std = get_baseline_for_all_events(waveform)
-
-    return (waveform, baseline, baseline_std)
+        return (waveform, baseline, baseline_std)
 
 
 def main(input_run_tag = "LXe/gain_calibration", input_voltage=-47):
@@ -256,15 +235,16 @@ def main(input_run_tag = "LXe/gain_calibration", input_voltage=-47):
     if input_voltage > 0 or input_voltage < -60:
         raise ValueError("voltage must be between -60 and 0.")
     
+    peak_processor = Peak_Processor()
+
     
     df_SPE_position = pd.read_csv(
-        "/kalinka/storage/darkmatter/XENONnT/sk6801/UCSD_data/processed_data/spe_position_LXe_2.csv",
-                    delimiter=",")
+        peak_processor.average_SPE_input_file,
+        delimiter=",")
 
 
     df = pd.read_csv(
-        # "/kalinka/storage/darkmatter/XENONnT/sk6801/UCSD_data/processed_data/kalinka_20250706_LXe_gain_info_single_channel.csv",
-        "/kalinka/storage/darkmatter/XENONnT/sk6801/UCSD_data/processed_data/kalinka_20250616_LXe_gain_info_single_channel.csv", 
+        peak_processor.peak_list_input_file, 
                     parse_dates=["date_time"],
                     delimiter=",",
                     quotechar='"', 
@@ -349,7 +329,7 @@ def main(input_run_tag = "LXe/gain_calibration", input_voltage=-47):
         output_basename = input_run_tag.split("/")[1] + f"_voltage_all_peak_info.csv"
     else:
         output_basename = input_run_tag.split("/")[1] + f"_voltage_{int(abs(input_voltage))}_peak_info.csv"
-    output_dirname = "/kalinka/storage/darkmatter/XENONnT/sk6801/UCSD_data/processed_data/spectrum/"
+    output_dirname = peak_processor.peak_list_output_dirname
     output_fname = os.path.join(output_dirname, output_basename)
 
     output_fname = util.get_new_filename(output_fname) ## in case the file already exists, create a new name
@@ -357,7 +337,7 @@ def main(input_run_tag = "LXe/gain_calibration", input_voltage=-47):
     peak_info_all.to_csv(output_fname, mode='w', index=False, header=True)
 
     for md_full_path in all_run_list:
-        result, _, _, _ = get_peak_level_data(
+        result, _, _, _ = peak_processor.get_peak_level_data(
             all_runs_d2d=all_runs_d2d,
             md_full_path=md_full_path,
             peak_merge_window_sample=250
