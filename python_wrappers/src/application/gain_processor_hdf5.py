@@ -83,7 +83,7 @@ class GainProcessor:
         """
         # data selection cuts
         # mask_run_tag = util.vec_regex_search('GXe/gain_calibration', all_runs.run_tag)
-        mask_run_tag_remove_trash = ~util.vec_regex_search('trash', all_runs.run_tag)
+        mask_run_tag_remove_trash = (~util.vec_regex_search('trash', all_runs.run_tag)) & (~util.vec_regex_search('test', all_runs.run_tag))
         # mask_run_tag_remove_trash = ~util.vec_regex_search('test', all_runs.run_tag)
         mask_time = (all_runs.date_time > from_date)
         # mask_start_index_nan = ~np.isnan(all_runs.start_index)
@@ -194,16 +194,16 @@ class GainProcessor:
                                 single_run_info.area_bin_edges_Vns)
         self.spe_fit = spe_fit
         
-        if (np.isnan(spe_fit.gain) or np.isnan(spe_fit.gain_error)):
+        # if (np.isnan(spe_fit.gain) or np.isnan(spe_fit.gain_error)):
 
-            logger.info("No gain found in the integral window histogram, trying with peak level analysis.")
+        #     logger.info("No gain found in the integral window histogram, trying with peak level analysis.")
 
-            self.tmp_peak_level_analysis(single_run_info)
+        #     self.tmp_peak_level_analysis(single_run_info)
 
-            spe_fit = fit_spe.FitSPE(single_run_info.voltage_preamp1_V, 
-                                self.peak_hist_count_Vns, 
-                                self.peak_bin_edges_Vns)
-            self.spe_fit = spe_fit
+        #     spe_fit = fit_spe.FitSPE(single_run_info.voltage_preamp1_V, 
+        #                         self.peak_hist_count_Vns, 
+        #                         self.peak_bin_edges_Vns)
+        #     self.spe_fit = spe_fit
         
         if not (np.isnan(spe_fit.gain) or np.isnan(spe_fit.gain_error)):
             spe_position = spe_fit.spe_position
@@ -211,18 +211,24 @@ class GainProcessor:
             gain = spe_fit.gain
             gain_err = spe_fit.gain_error
 
+            spe_resolution = spe_fit.spe_resolution
+            spe_resolution_err = spe_fit.spe_resolution_error
+            
         else:
             spe_position = np.nan
             spe_position_err = np.nan
             gain = np.nan
             gain_err = np.nan
             
+            spe_resolution = np.nan
+            spe_resolution_err = np.nan
+
             logger.warning(f"Cannot fit for file: {single_run_info.bin_full_path}")
             
         # plt.savefig("./test.png")
         # input("Press Enter to continue...")
             
-        return spe_position, spe_position_err, gain, gain_err
+        return spe_position, spe_position_err, gain, gain_err, spe_resolution, spe_resolution_err
     
     def process_runs(self):
 
@@ -237,24 +243,23 @@ class GainProcessor:
         spe_position_err_list = []
         gain_list = []
         gain_err_list = []
-        
+        spe_resolution_list = []
+        spe_resolution_err_list = []
+
         for i in range(len(all_runs_d2d)):
             # convert one row into run_info
             single_run_info = all_runs_d2d.get_row_info(i)
             logger.info(f"Processing file: {single_run_info.bin_full_path}")
             
-            # GainProcessor = gain_processor.GainProcessor()
-            # gain, gain_err = GainProcessor.process_single_run(single_run_info.bin_full_path,
-            #                                                    single_run_info.number_of_events,
-            #                                                    single_run_info.record_length_sample,
-            #                                                    single_run_info.voltage_preamp1_V) 
             
-            spe_position, spe_position_err, gain, gain_err = self.process_single_run(single_run_info)
+            spe_position, spe_position_err, gain, gain_err, spe_resolution, spe_resolution_err = self.process_single_run(single_run_info)
             
             spe_position_list.append(spe_position)
             spe_position_err_list.append(spe_position_err)
             gain_list.append(gain)
             gain_err_list.append(gain_err)
+            spe_resolution_list.append(spe_resolution)
+            spe_resolution_err_list.append(spe_resolution_err)
 
             # # for every 100 runs, save to csv file
             # if (i) % 1000 == 0 or i == len(all_runs_d2d) - 1:
@@ -269,7 +274,9 @@ class GainProcessor:
         all_runs_d2d.__setattr__("spe_position_err", np.array(spe_position_err_list))
         all_runs_d2d.__setattr__("gain", np.array(gain_list))
         all_runs_d2d.__setattr__("gain_err", np.array(gain_err_list))
-        
+        all_runs_d2d.__setattr__("spe_resolution", np.array(spe_resolution_list))
+        all_runs_d2d.__setattr__("spe_resolution_err", np.array(spe_resolution_err_list))
+
         delattr(all_runs_d2d, "area_hist_count_Vns")
         delattr(all_runs_d2d, "area_bin_edges_Vns")
         
