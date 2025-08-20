@@ -103,7 +103,7 @@ list_file = [
     "/kalinka/storage/darkmatter/XENONnT/sk6801/UCSD_data/processed_data/spectrum/tritium_voltage_46_peak_info.csv",
     "/kalinka/storage/darkmatter/XENONnT/sk6801/UCSD_data/processed_data/spectrum/Co57_voltage_all_peak_info.csv",
     "/kalinka/storage/darkmatter/XENONnT/sk6801/UCSD_data/processed_data/spectrum/Cs137_voltage_all_peak_info.csv",
-    "/kalinka/storage/darkmatter/XENONnT/sk6801/UCSD_data/processed_data/spectrum/gain_calibration_voltage_47_peak_info_12.csv",
+    "/kalinka/storage/darkmatter/XENONnT/sk6801/UCSD_data/processed_data/spectrum/background_voltage_47_peak_info_12.csv",
 ]
 
 
