@@ -121,7 +121,7 @@ class FastProcessor:
         # extra_data = result[1]
         for channel_level_data, extra_data in zip(result[0], result[1]):
 
-            fast_info.set_run_info_from_dict(channel_level_data.__dict__)
+            fast_info.set_info_from_dict(channel_level_data.__dict__)
             
             fast_info.randomly_selected_raw_WF = extra_data["waveform"][0]
             fast_info.randomly_selected_filtered_WF = extra_data["waveform"][1]

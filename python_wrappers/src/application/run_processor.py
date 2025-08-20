@@ -103,7 +103,7 @@ class RunProcessor:
             self.failure_flag = True
             return None
         
-        self.info.set_run_info_from_dict(self.metadata.__dict__)        
+        self.info.set_info_from_dict(self.metadata.__dict__)        
         
         return
     

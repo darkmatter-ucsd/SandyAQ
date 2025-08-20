@@ -106,7 +106,7 @@ class FastProcessor:
         
         RunProcessor.update_info_from_metafile(md_full_path)
         RunProcessor.update_info_processed_events(set_waveform = True)
-        fast_info.set_run_info_from_dict(RunProcessor.info.__dict__)        
+        fast_info.set_info_from_dict(RunProcessor.info.__dict__)        
         
         bin_full_path = RunProcessor.info.bin_full_path
         number_of_events = RunProcessor.info.number_of_events

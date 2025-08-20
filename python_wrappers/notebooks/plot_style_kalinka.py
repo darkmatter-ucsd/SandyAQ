@@ -58,7 +58,7 @@ params = {
     'lines.linestyle': 'solid',
     'lines.linewidth': 2,
     'lines.markeredgewidth': 1,
-    'lines.markersize': 7,
+    'lines.markersize': 1,
     # text
     'mathtext.default': 'regular',
     'savefig.bbox': 'tight',
