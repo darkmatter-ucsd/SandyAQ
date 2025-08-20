@@ -24,47 +24,65 @@ class RunInfo:
         self.bin_full_path: Union[str, List[str]] = ""
         self.md_full_path: str = ""
         
+        # from metadata
         self.date_time: pd.Timestamp = np.nan
         self.date_time_str: str = "" # for file regex
-        self.run_tag: str = ""
         self.comment: str = ""
-        self.data_taking_mode: str = ""
-        self.channel_list: int = np.nan # channel list of the SiPM (in case some are disabled or excluded)
-
-        self.board: int = np.nan  # which board the data was taken from, 0 or 1
-        self.n_channels: int = np.nan # number of channels on the board
-        self.board_0_channels: int = np.nan # DAQ channels on board 0
-        self.board_1_channels: int = np.nan # DAQ channels on board 1
-        self.channel: int = np.nan # SiPM channel number, 0-15 (later should have also a DAQ channel number)
-        self.threshold_adc: int = np.nan # triggering threshold in ADC counts (FIXME: perhaps also use for peak finding)
-
+        self.run_tag: str = ""
         self.runtime_s: float = np.nan # time during data taking in seconds
         self.voltage_preamp1_V: float = np.nan # voltage of preamp1 in Volts
         self.temperature_K: float = np.nan # temperature of the detector in Kelvin
-        
+        self.data_taking_mode: str = ""
+        self.channel_list: int = np.nan # channel list of the SiPM (in case some are disabled or excluded)
+        self.board_0_channels: int = np.nan # DAQ channels on board 0
+        self.board_1_channels: int = np.nan # DAQ channels on board 1
+
+        # datataking config from the metadata
         self.number_of_events: int = np.nan # number of events in the run (shared by all channels on the board)
-        self.n_processed_events: int = np.nan # number of processed events in the run (shared by all channels on the board)
-        self.start_index: int = np.nan # (not very useful, the starting index of events to be processed, remove noisy events in the beginning (shared by all channels on the board)
-        
+        self.post_trigger: float = np.nan # in percentage of the record length
         self.DC_OFFSET: float = np.nan 
         self.record_length_sample: int = np.nan
-        self.post_trigger: float = np.nan # in percentage of the record length
+
+        # board level info
+        self.board: int = np.nan  # which board the data was taken from, 0 or 1
+        self.n_channels: int = np.nan # number of channels on the board
         
+        # channel level info / settings
+        self.channel: int = np.nan # SiPM channel number, 0-15 (later should have also a DAQ channel number)
+        self.threshold_adc: int = np.nan # triggering threshold in ADC counts (FIXME: perhaps also use for peak finding)
+        self.n_processed_events: int = np.nan # number of processed events in the run (shared by all channels on the board)
+        self.start_index: int = np.nan # (not very useful, the starting index of events to be processed, remove noisy events in the beginning (shared by all channels on the board)
         self.baseline_n_samples: int = np.nan
         self.baseline_n_samples_avg: int = np.nan
+
+        # result of channel level event processing
         self.baseline_std_V: float = np.nan
         self.baseline_mean_V: float = np.nan
-        
         self.area_hist_count_Vns: float = np.nan
         self.area_bin_edges_Vns: float = np.nan
         
         self.run_id: int = np.nan
 
-        # self.board_info_list: List[BoardInfo] = None  # List of board info strings, e.g. ['board0', 'board1']
-
       
     def set_info_from_dict(self, info: dict):
         for column in self.__dict__.keys():
             if column in info:
-                self.__dict__[column] = info[column]
+                # convert pd.Series to numpy array if needed
+                if isinstance(info[column], pd.Series):
+                    info[column] = info[column].to_numpy()
+
+                # convert list to numpy array if needed
+                if isinstance(info[column], list):
+                    info[column] = np.array(info[column])
+            
+                # if the attribute is a numpy array and has only one element, convert it to a scalar
+                if isinstance(info[column], np.ndarray):
+                    if len(info[column]) == 1:
+                        self.__dict__[column] = info[column][0]
+                        continue
+                    else:
+                        self.__dict__[column] = info[column]
+                else:
+                    self.__dict__[column] = info[column]
+
         return

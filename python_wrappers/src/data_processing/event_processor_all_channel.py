@@ -8,7 +8,6 @@ import json
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
-# from data_structure.process_info import ProcessInfo
 from data_structure.run_info import RunInfo
 import data_processing.waveform_processor as waveform_processor
 import common.config_reader as common_config_reader
@@ -107,6 +106,11 @@ class EventProcessor:
 
         # dump the config to a json file
         sandpro_process_config_fname = self.common_cfg_reader.get_sandpro_process_config_path()
+        if not os.path.exists(os.path.dirname(sandpro_process_config_fname)):
+            os.makedirs(os.path.dirname(sandpro_process_config_fname))
+        
+        # print(f"Writing sandpro process config to {sandpro_process_config_fname}")
+
         with open(sandpro_process_config_fname, "w") as f:
             json.dump(process_config, f, indent=4)
             
@@ -175,9 +179,15 @@ class EventProcessor:
         wfp = waveform_processor.WFProcessor(self.file_dir, 
                 length_per_event = self.info.record_length_sample,
                 volt_per_adc=self.volt_per_adc)
-        
-        data_processed = self.waveform["data_per_channel"][self.start_index:self.end_index,channel,:]# in mV
+        # check dimention of the waveform
+        if self.waveform["data_per_channel"].shape[1] == 1:
+            data_processed = self.waveform["data_per_channel"][self.start_index:self.end_index,0,:]# in mV
+        else:
+            data_processed = self.waveform["data_per_channel"][self.start_index:self.end_index,channel,:]# in mV
         self.event_time_s = self.waveform['microseconds'][self.start_index:self.end_index]/1e6
+        if self.event_time_s[-1] > 100:
+            logger.warning("Event time is larger than 100 seconds. ")
+
         
         wfp.set_data(data_processed, event_time_s = self.event_time_s,  unit="mV")
         wfp.process_wfs() 

@@ -14,7 +14,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
 import common.utils as util
 import common.d2d as d2d
-import common.run_info as run_info
+# import common.run_info as run_info
+import data_structure.run_info as run_info
 import application.run_processor as run_processor
 import application.gain_processor_hdf5 as gain_processor
 import data_processing.waveform_processor as waveform_processor
@@ -112,14 +113,9 @@ class FastProcessor:
         record_length_sample = RunProcessor.info.record_length_sample
         voltage_preamp1_V = RunProcessor.info.voltage_preamp1_V
         
-        
-        # fast_info.gain, fast_info.gain_err = GainProcessor.process_single_run(bin_full_path,
-        #                                        number_of_events,
-        #                                        record_length_sample,
-        #                                        voltage_preamp1_V,
-        #                                        set_waveform=True)
+    
 
-        spe_position, spe_position_err, fast_info.gain, fast_info.gain_err = GainProcessor.process_single_run(RunProcessor.info)
+        spe_position, spe_position_err, fast_info.gain, fast_info.gain_err, _, _ = GainProcessor.process_single_run(RunProcessor.info)
         
         if RunProcessor.EventProcessor != None:
             

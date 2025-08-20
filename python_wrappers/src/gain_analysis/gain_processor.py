@@ -14,8 +14,8 @@ import csv
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
-# from common.run_info import RunInfo
-import common.run_info as run_info
+# import common.run_info as run_info
+import data_structure.run_info as run_info
 import data_processing.event_processor as event_processor
 import gain_analysis.fit_spe as fit_spe
 import common.d2d as d2d

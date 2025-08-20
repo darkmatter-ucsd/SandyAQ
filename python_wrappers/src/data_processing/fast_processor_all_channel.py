@@ -15,7 +15,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
 import common.utils as util
 import common.d2d as d2d
-import common.run_info as run_info
+# import common.run_info as run_info
+import data_structure.run_info as run_info
 import application.run_processor_all_channel as run_processor
 import application.gain_processor_hdf5 as gain_processor
 import data_processing.waveform_processor as waveform_processor
@@ -116,7 +117,7 @@ class FastProcessor:
             logger.error(f"Metadata file {md_full_path} is not valid or processing failed. Skipping this file.")
             return None
         
-        result = RunProcessor.process_all_channels(md_full_path, more_info=True)
+        result = RunProcessor.process_all_bins(md_full_path, more_info=True)
         # extra_data = result[1]
         for channel_level_data, extra_data in zip(result[0], result[1]):
 
@@ -134,7 +135,7 @@ class FastProcessor:
             fast_info.areas_Vns = extra_data["areas_Vns"]
             fast_info.heights_V = extra_data["heights_V"]
 
-            spe_position, spe_position_err, fast_info.gain, fast_info.gain_err = GainProcessor.process_single_run(channel_level_data)
+            spe_position, spe_position_err, fast_info.gain, fast_info.gain_err, _, _ = GainProcessor.process_single_run(channel_level_data)
 
             if GainProcessor.spe_fit != None:
                     fast_info.spe_fit = GainProcessor.spe_fit

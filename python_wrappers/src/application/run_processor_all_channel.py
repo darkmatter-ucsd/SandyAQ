@@ -13,7 +13,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.join(current_dir,"../"))
-import common.run_info as run_info
+from data_structure.run_info import RunInfo
 import data_processing.event_processor_all_channel as event_processor
 import common.config_reader as common_config_reader
 import common.metadata_handler as metadata_handler
@@ -41,26 +41,32 @@ class RunProcessor:
 
         self.config = self.common_cfg_reader.get_data_processing_config()
         
+        # settings for the run processor
         self.reprocess = self.config.getboolean('RUN_PROCESSOR_SETTINGS', 'reprocess')
         
+        # settings for the gain processor
         self.hist_n_bins = int(self.config.get('GAIN_PROCESSOR_SETTINGS', 'hist_n_bins'))
-        
         tmp = self.config.get("GAIN_PROCESSOR_SETTINGS", "hist_range")
         tmp = tmp.split(' ')
         self.hist_range = (float(tmp[0]),float(tmp[1]))
         
         self.hdf5_key = self.config.get('RUN_PROCESSOR_SETTINGS', 'hdf5_key')
-        #FIXME: probably should also put the dictionary to the config file
-        self.hdf5_size_dict = {"bin_full_path":350, 
-                                "md_full_path":350,
-                                "run_tag":100,
-                                "comment":350,
-                                "area_hist_count_Vns":900,
-                                "board_0_channels":100,
-                                "board_1_channels":100,
-                                "data_taking_mode":20}
-        
-        self.info = run_info.RunInfo()
+        # self.hdf5_size_dict = {"bin_full_path":350, 
+        #                         "md_full_path":350,
+        #                         "run_tag":100,
+        #                         "comment":350,
+        #                         "area_hist_count_Vns":900,
+        #                         "board_0_channels":100,
+        #                         "board_1_channels":100,
+        #                         "data_taking_mode":20}
+        tmp = "HDF5_SIZE_SETTINGS"
+        self.hdf5_size_dict = {
+            key: self.config.getint(tmp, key)
+            for key, _ in self.config.items(tmp)
+        }
+
+        # check self.hdf5_size_dict
+        self.info = RunInfo()
         
     def get_data_files(self, data_directories: List[str], exclude_directories: List[str]) -> List[str]:
         """
@@ -94,7 +100,11 @@ class RunProcessor:
         """
         check which files to process.
         If reprocess = True, the already processed files will be processed again.
-        If the number of entries in the class RunInfo in SandyAQ/python_wrappers/src/common/run_info.py is not the same, -> reprocess
+        If the number of entries in the class RunInfo in src/common/run_info.py is not the same -> reprocess
+        If reprocess = False and the output file already exists and no. of columns in the existing DataFrame 
+        is the same as in the RunInfo class, then:
+            - filter out the files that are already processed
+            - return the list of files to process
         """
         
         existing_df = None
@@ -158,7 +168,7 @@ class RunProcessor:
             self.failure_flag = True
             return None
         
-        self.info.set_run_info_from_dict(self.metadata.__dict__)
+        self.info.set_info_from_dict(self.metadata.__dict__)
         self.bin_full_path_list = self.metadata.bin_full_path_list
         if self.info.data_taking_mode == "all_channels":
             self.channel_threshold_dict = self.metadata.channel_threshold_dict
@@ -178,48 +188,7 @@ class RunProcessor:
 
         return board_channels
 
-    
-    # def update_info_processed_events(self, rel_channel, set_waveform = False):
-    #     """
-    #     Process the events for the given channel and update the info object with the processed data.
-    #     If the processing fails, set the failure_flag to True.
-
-    #     Parameters
-    #     ----------
-    #     rel_channel : int
-    #         The relative channel number to process. (always start from 0)
-    #     set_waveform : bool, optional
-    #         If True, set the waveform data in the EventProcessor. Default is False.
-    #     """
-
-    #     if self.failure_flag == True:
-    #         return None
-        
-        
-    #     if self.EventProcessor.failure_flag == False:
-
-    #         self.info.set_run_info_from_dict(self.EventProcessor.info.__dict__)
-
-    #         # self.EventProcessor.baseline_n_samples = self.EventProcessor.baseline_n_samples
-    #         # self.EventProcessor.baseline_n_samples_avg = self.EventProcessor.baseline_n_samples_avg
-    #         # self.info.n_channels = self.EventProcessor.info.n_channels
-            
-    #         # areas_Vns = self.EventProcessor.areas_Vns
-            
-    #         # self.info.area_hist_count_Vns,self.info.area_bin_edges_Vns = np.histogram(areas_Vns,bins=self.hist_n_bins,range=self.hist_range)
-
-            
-    #         # self.info.baseline_std_V = self.EventProcessor.info.baseline_std_V
-    #         # self.info.baseline_mean_V = self.EventProcessor.baseline_mean_V
-    #         # self.info.n_processed_events = self.EventProcessor.n_processed_events
-    #         # self.info.start_index = self.EventProcessor.start_index
-            
-    #     else: 
-    #         self.failure_flag = True
-                
-    #     return
-               
-    def process_all_channels(self, md_full_path: str, more_info: bool = False) -> List[dict]:
+    def process_all_bins(self, md_full_path: str, more_info: bool = False) -> List[dict]:
 
         # refresh the flag in loop
         self.failure_flag = False 
@@ -229,21 +198,20 @@ class RunProcessor:
 
         for board_number, bin_full_path in enumerate(self.bin_full_path_list):
 
+            self.bin_full_path = bin_full_path
             self.info.board = board_number
+            self.info.bin_full_path = bin_full_path
 
             # get number of channel on the board
-            board_n_channels = self.get_n_channel_for_board(
+            self.info.n_channels = self.get_n_channel_for_board(
                 self.info.data_taking_mode,
                 board_number, 
                 self.info.board_0_channels, 
                 self.info.board_1_channels)
-
-            self.EventProcessor = event_processor.EventProcessor(
-                self.info,
-                bin_full_path, 
-                board_n_channels)
+            
+            self.EventProcessor = event_processor.EventProcessor(self.info)
         
-            for rel_channel in range(board_n_channels):
+            for rel_channel in range(self.info.n_channels):
 
                 self.EventProcessor.process_all_events(rel_channel)
 
@@ -309,48 +277,20 @@ class RunProcessor:
             self.update_info_from_metafile(md_full_path)
 
             # make sure that it's all channels data file
-            if (self.failure_flag == True) or (self.info.data_taking_mode != "all_channels") or (len(self.bin_full_path_list) != 2):
+            # if (self.failure_flag == True) or (self.info.data_taking_mode != "all_channels") or (len(self.bin_full_path_list) != 2):
+            if (self.failure_flag == True):
                 logger.error(f"Metadata file {md_full_path} is not valid or processing failed. Skipping this file.")
                 continue
 
-            # for board_number, bin_full_path in enumerate(self.info.bin_full_path):
+            # process all binary for the metadata file
+            result = self.process_all_bins(md_full_path, more_info=False)
 
-            #     self.info.board = board_number
-
-            #     # get number of channel on the board
-            #     board_n_channels = self.get_n_channel_for_board(self.info.data_taking_mode,
-            #                     board_number, 
-            #                     self.info.board_0_channels, self.info.board_1_channels)
-
-            #     self.EventProcessor = event_processor.EventProcessor(
-            #         bin_full_path, 
-            #         self.info.number_of_events, 
-            #         self.info.record_length_sample, 
-            #         self.info.data_taking_mode, 
-            #         board_n_channels)
-            
-            #     for rel_channel in range(board_n_channels):
-            #         # all processing
-            #         self.update_info_processed_events(rel_channel, set_waveform = False)
-
-            #         # get actual channel number
-            #         self.info.channel = self.info.board_0_channels[rel_channel] if board_number == 0 else self.info.board_1_channels[rel_channel] + len(self.info.board_0_channels)
-                    
-            #         data = self.info.__dict__ 
-            #         data["bin_full_path"] = bin_full_path
-
-                    # if self.failure_flag == True:
-                    #     logger.error(f"Processing of {md_full_path} failed. Skipping this file.")
-                    #     continue
-
-            # process all channels in the run
-            result = self.process_all_channels(md_full_path, more_info=False)
             for channel_level_data in result[0]:
 
                 data = channel_level_data.__dict__
 
                 # Create a DataFrame from the new data -> hdf; write to file in append mode
-                if isinstance(data,dict) and (data["data_taking_mode"] == "all_channels"):
+                if isinstance(data,dict):
                     new_df = pd.DataFrame.from_dict([data])
                     # new_df.to_hdf(self.output_file, key=self.hdf5_key, mode='a', 
                     #               append=True, format='table')
