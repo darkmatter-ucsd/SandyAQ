@@ -32,14 +32,17 @@ Digitizer::Digitizer(std::string& sConfigFile, CommonConfig_t &CommonConfig, con
     m_sFPIOLevel = r.Get<std::string>(sBoardCategory, "FPIO_LEVEL");
 
     //Plot settings
-    int m_iPlottingEnabled = r.Get<int>(sBoardCategory, "PLOTTING");
+    m_iPlottingEnabled = r.Get<int>(sBoardCategory, "PLOTTING");
+    printf("Plot enabling flag for board: %d\n", m_iPlottingEnabled);
     if (m_iPlottingEnabled) {
-            m_iPlottedChannels = (r.GetVector<int>(sBoardCategory, "PLOT_CHANNELS"));
-            //Set TGraphs
-            for (int c=0; c<m_iPlottedChannels.size(); c++){
-                TGraph* ch_graph = new TGraph();
-                m_Graphs.push_back(ch_graph);
-            }
+        m_iPlottedChannels = (r.GetVector<int>(sBoardCategory, "PLOT_CHANNELS"));
+        //Set TGraphs
+        for (int c=0; c<m_iPlottedChannels.size(); c++){
+            printf("Plotting channel %d\n", c);
+            TGraph* ch_graph = new TGraph();
+            m_Graphs.push_back(ch_graph);
+            
+        }
     }
 
     m_iEnableMask = 0;
@@ -161,3 +164,7 @@ int Digitizer::OpenDigitizer() {
 int Digitizer::ProgramDigitizer() {}
 void Digitizer::Quit() {}
 int Digitizer::SetLVDSSync(int isMaster, int iDaisyChainNum, int iTotalNBoards) {}
+//Yes. This is usually just CAEN_DGTZ_AllocatEvent(). However, different digitizers have different types of events to allocate
+int Digitizer::AllocateEvent() {}
+void Digitizer::FreeEvent() {} //Once again, freeing the event has the same function. Different digitizers and different firmwares have different means of freeing the event
+int Digitizer::PlotEvent(char *EventPtr, int channel, int plotChannelIndex) {}

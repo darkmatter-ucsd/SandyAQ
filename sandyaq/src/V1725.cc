@@ -17,7 +17,7 @@ int V1725::ReadX725SpecificParams(){
     return ret;
 }
 
-int V1725::ProgramDigitizers() {
+int V1725::ProgramDigitizer() {
     int ret = 0;
     if (m_sFirmware == "WAVEFORM") {
         std::cout << "Programming the digitizer with the waveform acquisition firmware\n";
@@ -182,7 +182,8 @@ int V1725::ProgramDefault() {
 };
 
 int V1725::ProgramDAW() {
-
+    int ret=0;
+    return ret;
 };
 
 int V1725::SetLVDSSync(int isMaster, int iDaisyChainNum, int iTotalNBoards) {
@@ -192,33 +193,105 @@ int V1725::SetLVDSSync(int isMaster, int iDaisyChainNum, int iTotalNBoards) {
     //  3) TRG OUT propagates motherboard signals (bits [17:16])
     //  4) Signal that is propagated is busy (bits[19:18])
     //  5) Use extended trigger time stamp (BECAUSE WHY WOULD YOU NOT USE IT??? SERIOUSLY, USE IT!!!)
-    int handle = m_iHandle;
-    uint32_t ret = 0;
+    // int handle = m_iHandle;
+    // uint32_t ret = 0;
+    // uint32_t reg;
+
+    // ret |= CAEN_DGTZ_ReadRegister(handle, 0x811C, &reg);
+    // ret |= CAEN_DGTZ_WriteRegister(handle, 0x811C, reg | 0x4d0138);
+
+    // //Set start with either software or LVDS
+    // ret |= CAEN_DGTZ_ReadRegister(handle, 0x8100, &reg);
+    // if (isMaster){
+    //     ret |= CAEN_DGTZ_WriteRegister(handle, 0x8100, reg | (0x00000100));
+    // }
+    // else {
+    //     ret |= CAEN_DGTZ_WriteRegister(handle, 0x8100, reg | (0x00000107));
+    // }
+
+    // //BUSY signal is raised by having some set number of buffers (set at 0x816C) being full
+    // //0x800C is the number of buffers (set by programming the record length)
+    // ret |= CAEN_DGTZ_ReadRegister(handle, 0x800C, &reg);
+    // ret |= CAEN_DGTZ_WriteRegister(handle, 0x816C, (uint32_t)(pow(2., reg) - 10));
+
+    // //Timestamp offset
+    // ret |= CAEN_DGTZ_WriteRegister(handle, 0x8170, 3 * (iTotalNBoards - 1 - iDaisyChainNum) + (iDaisyChainNum == 0 ? -1 : 0));
+
+    // // register 0x81A0: select the lowest two quartet as "nBUSY/nVETO" type. BEWARE: set ALL the quartet bits to 2
+    // ret |= CAEN_DGTZ_ReadRegister(handle, 0x81A0, &reg);
+    // ret |= CAEN_DGTZ_WriteRegister(handle, 0x81A0, reg | 0x00002222);
+
+    int ret = 0;
     uint32_t reg;
+    uint32_t orreg;
+    int handle = m_iHandle;
 
-    ret |= CAEN_DGTZ_ReadRegister(handle, 0x811C, &reg);
-    ret |= CAEN_DGTZ_WriteRegister(handle, 0x811C, reg | 0x4d0138);
-
-    //Set start with either software or LVDS
+    //ADDR_ACQUISITION_MODE is 0x8100
+    //Bit 8 enables the Busy input, Bits [0:1] sets the start mode
+    //where 11 is LVDS controlled and 00 is software controlled.
+    //  - Slaves are LVDS start mode controlled
+    //  - Master is software controlled
+    //Bit 2 arms the slave digitizers
     ret |= CAEN_DGTZ_ReadRegister(handle, 0x8100, &reg);
-    if (isMaster){
-        ret |= CAEN_DGTZ_WriteRegister(handle, 0x8100, reg | (0x00000100));
-    }
-    else {
-        ret |= CAEN_DGTZ_WriteRegister(handle, 0x8100, reg | (0x00000107));
-    }
+    orreg = (isMaster) ? 0x100 : 0x107;
+    reg |= orreg;
+    ret |= CAEN_DGTZ_WriteRegister(handle, 0x8100, reg);
 
-    //BUSY signal is raised by having some set number of buffers (set at 0x816C) being full
-    //0x800C is the number of buffers (set by programming the record length)
-    ret |= CAEN_DGTZ_ReadRegister(handle, 0x800C, &reg);
-    ret |= CAEN_DGTZ_WriteRegister(handle, 0x816C, (uint32_t)(pow(2., reg) - 10));
-
-    //Timestamp offset
-    ret |= CAEN_DGTZ_WriteRegister(handle, 0x8170, 3 * (iTotalNBoards - 1 - iDaisyChainNum) + (iDaisyChainNum == 0 ? -1 : 0));
-
-    // register 0x81A0: select the lowest two quartet as "nBUSY/nVETO" type. BEWARE: set ALL the quartet bits to 2
+    //ADDR_LVDS_NEW_FEATURES is 
+    //Enables nBusy/nVeto New Features
     ret |= CAEN_DGTZ_ReadRegister(handle, 0x81A0, &reg);
-    ret |= CAEN_DGTZ_WriteRegister(handle, 0x81A0, reg | 0x00002222);
+    reg |= 0x22;
+    ret |= CAEN_DGTZ_WriteRegister(handle, 0x81A0, reg);
+
+    //ADDR_FRONT_PANEL_IO_SET is 0x811C
+    //Bits 16:19 just sets propagation to TRG OUT, not strictly necessary
+    ret |= CAEN_DGTZ_ReadRegister(handle, 0x811C, &reg);
+    orreg = (isMaster) ? 0x104 : 0xD0104;
+    reg |= orreg;
+    ret |= CAEN_DGTZ_WriteRegister(handle, 0x811C, reg);
+
+    // //BUSY signal is raised by having some set number of buffers (set at 0x816C) being full
+    // //0x800C is the number of buffers (set by programming the record length)
+    // ret |= CAEN_DGTZ_ReadRegister(handle, 0x800C, &reg);
+    // ret |= CAEN_DGTZ_WriteRegister(handle, 0x816C, (uint32_t)(pow(2., reg) - 1));
+
+    //ADDR_RUN_DELAY is 
+    //Set Run Delay
+    ret |= CAEN_DGTZ_ReadRegister(handle, ADDR_RUN_DELAY, &reg);
+    reg |= 2 * (iTotalNBoards - 1 - iDaisyChainNum);
+    ret |= CAEN_DGTZ_WriteRegister(handle, ADDR_RUN_DELAY, reg);
+
+    return ret;
+}
+
+int V1725::AllocateEvent() {
+    int ret = 0;
+    ret = CAEN_DGTZ_AllocateEvent(m_iHandle, (void**)&m_PlottingEvent);
+    if (ret!=CAEN_DGTZ_Success){
+        std::cout <<"ERROR: Failed to allocate readout event for board "<<m_iBoardIndex<<std::endl;
+        return -1;
+    }
+    return ret;
+}
+
+void V1725::FreeEvent(){
+    CAEN_DGTZ_FreeEvent(m_iHandle, (void**)&m_PlottingEvent);
+}
+
+int V1725::PlotEvent(char* EventPtr, int channel, int plotChannelIndex){
+    int pch_i = plotChannelIndex;
+    int ret=0;
+
+    ret = CAEN_DGTZ_DecodeEvent(m_iHandle, EventPtr, (void**)&m_PlottingEvent);
+    
+    uint32_t samples_this_channel = m_PlottingEvent->ChSize[channel];
+
+    m_Graphs[pch_i]->Set(samples_this_channel);
+                                
+    for (int p_j=0; p_j<samples_this_channel; p_j++){
+        m_Graphs[pch_i]->SetPointX(p_j, p_j*m_dDT);
+        m_Graphs[pch_i]->SetPointY(p_j, m_PlottingEvent->DataChannel[channel][p_j]);
+    }
 
     return ret;
 }

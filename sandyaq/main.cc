@@ -83,31 +83,35 @@ int main(int argc, char* argv[]) {
     std::vector<CAEN_DGTZ_UINT16_EVENT_t*> Events16;
     std::map<int, int> nthFlashADCDigitizers; // These are flash ADC digitizers that have your usual, well behaved type of events with a <=16 bit adc
     int n_flashADC = 0;
+    int iMaxADC = 0;
     
     for (int i=0; i<config.iNBoards; i++) {
         if (config.sBoardTypes[i] == "V1725") {
             V1725* dgtz = new V1725(sConfigFile, config, i);
             digitizers.push_back(dgtz);
-            ret = CAEN_DGTZ_AllocateEvent(dgtz->m_iHandle, (void**)&Events16[n_flashADC]);
-            if (ret!=CAEN_DGTZ_Success){
-                std::cout <<"ERROR: Failed to allocate event for the "<<n_flashADC<<"th flash ADC digitizer\n";
-                return -1;
-            }
-            nthFlashADCDigitizers[i] = n_flashADC;
-            n_flashADC++;
+            // Events16.push_back(NULL);
+            // ret = CAEN_DGTZ_AllocateEvent(dgtz->m_iHandle, (void**)&Events16[n_flashADC]);
+            // if (ret!=CAEN_DGTZ_Success){
+            //     std::cout <<"ERROR: Failed to allocate event for the "<<n_flashADC<<"th flash ADC digitizer\n";
+            //     return -1;
+            // }
+            // nthFlashADCDigitizers[i] = n_flashADC;
+            // n_flashADC++;
+            dgtz->AllocateEvent();
         }
         else if (config.sBoardTypes[i] == "V1742") {
             // config file parses the number of boards of this type
             V1742* dgtz = new V1742(sConfigFile, config, i);
             digitizers.push_back(dgtz);
-            Events742.push_back(NULL);
-            ret = CAEN_DGTZ_AllocateEvent(dgtz->m_iHandle, (void**)&Events742[n_x742]);
-            if (ret!=CAEN_DGTZ_Success){
-                std::cout <<"ERROR: Failed to allocate event for V1742 number "<<n_x742<<"\n";
-                return -1;
-            }
-            nthx742Index[i] = n_x742;
-            n_x742++;
+            // Events742.push_back(NULL);
+            // ret = CAEN_DGTZ_AllocateEvent(dgtz->m_iHandle, (void**)&Events742[n_x742]);
+            // if (ret!=CAEN_DGTZ_Success){
+            //     std::cout <<"ERROR: Failed to allocate event for V1742 number "<<n_x742<<"\n";
+            //     return -1;
+            // }
+            // nthx742Index[i] = n_x742;
+            // n_x742++;
+            dgtz->AllocateEvent();
         }
         //TO DO: Add else if statements for V1720s
     }
@@ -150,8 +154,7 @@ int main(int argc, char* argv[]) {
         iTotBoardIndex++;
     }
 
-    // ret
-    // ForceClockSync(digitizers[0]->m_iHandles[0]); //Sync is on board 0 always!
+    // ForceClockSync(digitizers[0]->m_iHandle); //Sync is on board 0 always!
 
     //set the output file
     FILE* event_file[iNTotBoards] = {NULL};
@@ -177,7 +180,6 @@ int main(int argc, char* argv[]) {
     runcontrol.acquiring=0;
 
     //Special allocations for the events if you want to decode them
-    // CAEN_DGTZ_UINT16_EVENT_t *Event16=NULL
     char *EventPtr = NULL;
     CAEN_DGTZ_EventInfo_t EventInfo;
     
@@ -201,6 +203,7 @@ int main(int argc, char* argv[]) {
                         PrevRateTime[i] = get_time();
                     }
                     runcontrol.acquiring=1;
+                    // sleep(5);
                 }
                 
                 if (runcontrol.acquiring){
@@ -220,7 +223,7 @@ int main(int argc, char* argv[]) {
                             //         ret = CAEN_DGTZ_GetEventInfo(dgtz->m_iHandles[i], buffer[iTotBoardIndex], iBufferSize, ev, &EventInfo, &EventPtr);
                             //         ret = CAEN_DGTZ_DecodeEvent(dgtz->m_iHandles[i], EventPtr, (void**)&Events742[i]);
                             //         if (ret!=CAEN_DGTZ_Success){
-                            //             std::cout<<"ERROR: Could not decode 742 event!\n";
+                            //             std::cout<<"ERROR: Could not decode 742CLOCK event!\n";
                             //         }
                             //     }
                             // }
@@ -312,20 +315,7 @@ int main(int argc, char* argv[]) {
                         uint32_t buf_size_from_q = BufferSizeQueue[p_iTotBoardIndex].front();
                         uint32_t num_events_from_q = NumEventsQueue[p_iTotBoardIndex].front();
 
-                        
-                        for (int ev=0; ev<num_events_from_q; ev++){
-                            ret = CAEN_DGTZ_GetEventInfo(dgtz->m_iHandle, buf_from_q, buf_size_from_q, ev, &EventInfo, &EventPtr);
-                            if (dgtz->m_BoardType=="V1742") {
-                                ret = CAEN_DGTZ_DecodeEvent(dgtz->m_iHandle, EventPtr, (void**)&Events742[nthx742Index[p_iTotBoardIndex]]);
-                            }
-                            else if (dgtz->m_bIsFlashADC){
-                                ret = CAEN_DGTZ_DecodeEvent(dgtz->m_iHandle, EventPtr, (void**)&Events16[nthFlashADCDigitizers[p_iTotBoardIndex]]);
-                            }
-                            
-                            if (ret!=CAEN_DGTZ_Success){
-                                std::cout<<"ERROR: Could not decode 742 event!\n";
-                            }
-                        }
+                        ret = CAEN_DGTZ_GetEventInfo(dgtz->m_iHandle, buf_from_q, buf_size_from_q, 0, &EventInfo, &EventPtr);
                         
                         // printf("%d\n", bPlotFlags);
                         if (bPlotFlags&&dgtz->m_iPlottingEnabled){
@@ -335,38 +325,10 @@ int main(int argc, char* argv[]) {
                             for (int pch_i = 0; pch_i<dgtz->m_iPlottedChannels.size(); pch_i++){
                                 //TO DO: Make a mapping of the total board index to the index of the x742. For now, ALWAYS make the x742s go first
                                 int this_channel = dgtz->m_iPlottedChannels[pch_i];
-                                uint32_t samples_this_channel = 0;
-                                int this_channel_group = 0;
-                                int this_channel_index_group = 0;
 
-                                if (dgtz->m_BoardType=="V1742"){
-                                    this_channel_group = this_channel / 8; // Channels on the x742 are grouped into
-                                    this_channel_index_group = this_channel % 8; // The channel index within a particular group
-                                    samples_this_channel = Events742[nthx742Index[p_iTotBoardIndex]]->DataGroup[this_channel_group].ChSize[this_channel_index_group];
-                                }
-                                else if (dgtz->m_bIsFlashADC){
-                                    samples_this_channel = Events16[nthFlashADCDigitizers[p_iTotBoardIndex]]->ChSize[this_channel];
-                                }
-                                
-                                // printf("Has %d samples\n", samples_this_channel);
-                                dgtz->m_Graphs[pch_i]->Set(samples_this_channel);
-                                
-                                for (int p_j=0; p_j<samples_this_channel; p_j++){
-                                    dgtz->m_Graphs[pch_i]->SetPointX(p_j, p_j*dgtz->m_dDT);
-                                    if (dgtz->m_BoardType=="V1742"){
-                                        dgtz->m_Graphs[pch_i]->SetPointY(p_j, Events742[nthx742Index[p_iTotBoardIndex]]->DataGroup[this_channel_group].DataChannel[this_channel_index_group][p_j]);
-                                    }
-                                    else if (dgtz->m_bIsFlashADC){
-                                        dgtz->m_Graphs[pch_i]->SetPointY(p_j, Events16[nthFlashADCDigitizers[p_iTotBoardIndex]]->DataChannel[this_channel][p_j]);
-                                    }
-                                }
-
+                                //Actually all this does is populate a graph
+                                dgtz->PlotEvent(EventPtr, this_channel, pch_i);
                                 dgtz->m_Graphs[pch_i]->SetLineColor(p_iTotBoardIndex+1);
-                                // if (legendNotDrawn){
-                                    // std::stringstream legend_ss;
-                                    // legend_ss<<"Board "<<p_iTotBoardIndex<<" Ch "<<this_channel;
-                                    // DaqLegend->AddEntry(dgtz->m_Graphs[i][pch_i], legend_ss.str().c_str(), "l");
-                                // }
 
                                 if ((p_iTotBoardIndex==0)&&(pch_i==0)) {
                                     dgtz->m_Graphs[pch_i]->Draw("AL");
@@ -416,12 +378,7 @@ int main(int argc, char* argv[]) {
     for (Digitizer* dgtz : digitizers) {
         CAEN_DGTZ_SWStopAcquisition(dgtz->m_iHandle);
         CAEN_DGTZ_FreeReadoutBuffer(&buffer[iTotBoardIndex]);
-        if (dgtz->m_BoardType=="V1742"){
-            CAEN_DGTZ_FreeEvent(dgtz->m_iHandle, (void**)&Events742[nthx742Index[iTotBoardIndex]]);
-        }
-        else if (dgtz->m_bIsFlashADC){
-            CAEN_DGTZ_FreeEvent(dgtz->m_iHandle, (void**)&Events16[nthFlashADCDigitizers[iTotBoardIndex]]);
-        }
+        dgtz->FreeEvent();
         iTotBoardIndex++;
     }
 

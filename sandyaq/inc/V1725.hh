@@ -29,11 +29,17 @@ class V1725 : public Digitizer {
 
         // int OpenDigitizers();
         int ReadX725SpecificParams();
-        int ProgramDigitizers();
+        int ProgramDigitizer();
         int ProgramDefault();
         int ProgramDAW();
+
+        int AllocateEvent();
+        void FreeEvent();
+        int PlotEvent(char *EventPtr, int channel, int plotChannelIndex);
+
         int SetLVDSSync(int isMaster, int iDaisyChainNum, int iTotalNBoards);
 
+        void PlotEvent(char *EventPtr);
         // int SetSyncMode(int *handle);
         // int StartRun(int *handle);
         // int StopRun(int *handle);
@@ -46,11 +52,17 @@ class V1725 : public Digitizer {
         const uint32_t iNbits = 14;
         //Map for Trigger Modes
         //TODO: add Veto mode
+
+        CAEN_DGTZ_UINT16_EVENT_t* m_PlottingEvent;
     
     private:
         std::string m_sConfigFile;
         uint32_t m_iRecordLength;
         uint32_t m_iCoincidences;
+
+        
+        //NOTE: There is only the plotting event because the V1725 is a good boy and doesn't need to be decoded so that correction tables can be applied.
+        //The saving of the events can just be done via dumping the buffer
 };
 
 #endif

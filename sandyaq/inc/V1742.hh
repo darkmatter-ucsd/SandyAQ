@@ -30,8 +30,15 @@ class V1742 : public Digitizer{
 
         int ReadX742SpecificParams();
         int ProgramDigitizer();
+        int AllocateEvent();
+        void FreeEvent();
+        int PlotEvent(char *EventPtr, int channel, int plotChannelIndex);
+
         int ProgramDefault();
         int SetLVDSSync(int isMaster, int iDaisyChainNum, int iTotalNBoards);
+        
+        // int DecodeEvent(char* EventPtr);
+        // void PlotEvent(char* EventPtr);
 
         void Quit();
 
@@ -39,6 +46,10 @@ class V1742 : public Digitizer{
         double x742DRS4dt[4] = {0.2, 0.5, 1., 1./0.75};
 
         bool m_bIsFlashADC = false;
+
+        CAEN_DGTZ_X742_EVENT_t* m_PlottingEvent;
+        CAEN_DGTZ_X742_EVENT_t* m_Event;
+
 
     private:
         uint32_t m_iNch;

@@ -181,6 +181,8 @@ static int StartRun(std::vector<Digitizer*> &Boards, CommonConfig_t* commonConfi
         }
         else if (commonConfig->SyncMode == "LVDS_SYNC") {
             CAEN_DGTZ_SWStartAcquisition(masterBoard->m_iHandle);
+            // for (Digitizer* dgtz : Boards)
+            //     CAEN_DGTZ_SWStartAcquisition(dgtz->m_iHandle);
         }
         else{
             return -1;

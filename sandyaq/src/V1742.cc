@@ -190,3 +190,49 @@ int V1742::SetLVDSSync(int isMaster, int iDaisyChainNum, int iTotalNBoards) {
 
     return ret;
 }
+
+// int V1742::DecodeEvent(char* EventPtr){
+    // int ret = 0;
+    // ret = CAEN_DGTZ_DecodeEvent(m_iHandle, EventPtr, (void**)&Events742[nthx742Index[p_iTotBoardIndex]]);
+// }
+
+int V1742::AllocateEvent(){
+    int ret = 0;
+    ret = CAEN_DGTZ_AllocateEvent(m_iHandle, (void**)&m_Event);
+    if (ret!=CAEN_DGTZ_Success){
+        std::cout <<"ERROR: Failed to allocate readout event for board "<<m_iBoardIndex<<std::endl;
+        return -1;
+    }
+    
+    ret = CAEN_DGTZ_AllocateEvent(m_iHandle, (void**)&m_PlottingEvent);
+    if (ret!=CAEN_DGTZ_Success){
+        std::cout <<"ERROR: Failed to allocate plotting event for board "<<m_iBoardIndex<<std::endl;
+        return -1;
+    }
+    return ret;
+}
+
+void V1742::FreeEvent(){
+    CAEN_DGTZ_FreeEvent(m_iHandle, (void**)&m_Event);
+    CAEN_DGTZ_FreeEvent(m_iHandle, (void**)&m_PlottingEvent);
+}
+
+int V1742::PlotEvent(char* EventPtr, int channel, int plotChannelIndex){
+    int pch_i = plotChannelIndex;
+    int ret=0;
+
+    ret = CAEN_DGTZ_DecodeEvent(m_iHandle, EventPtr, (void**)&m_PlottingEvent);
+    
+    int channel_group = channel / 8; // Channels on the x742 are grouped into
+    int channel_index_group = channel % 8; // The channel index within a particular group
+    uint32_t samples_this_channel = m_PlottingEvent->DataGroup[channel_group].ChSize[channel_index_group];
+
+    m_Graphs[pch_i]->Set(samples_this_channel);
+                                
+    for (int p_j=0; p_j<samples_this_channel; p_j++){
+        m_Graphs[pch_i]->SetPointX(p_j, p_j*m_dDT);
+        m_Graphs[pch_i]->SetPointY(p_j, m_PlottingEvent->DataGroup[channel_group].DataChannel[channel_index_group][p_j]);
+    }
+
+    return ret;
+}

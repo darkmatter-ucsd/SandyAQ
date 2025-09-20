@@ -33,6 +33,10 @@ class Digitizer {
         // virtual void SetGraphs();
         virtual void Quit();
 
+        virtual int AllocateEvent();
+        virtual void FreeEvent();
+        virtual int PlotEvent(char *EventPtr, int channel, int plotChannelIndex);
+
         //Map for Trigger Modes
         std::map<std::string, CAEN_DGTZ_TriggerMode_t> TriggerModeMap = {
             {"DISABLED", CAEN_DGTZ_TRGMODE_DISABLED},
