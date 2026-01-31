@@ -30,12 +30,24 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <unistd.h>
+#include <stdlib.h>
+#include <termios.h>
 
 //CAEN libraries
 #include <CAENDigitizer.h>
 
 //Internal headers
 #include "CommonConfig.hh"
+
+typedef struct RunControlVars_t {
+    int quit;
+    int restart;
+    int start;
+    int acquiring;
+};
+
+static struct termios g_old_kbd_mode;
 
 template<typename T>
 static void PrintVec1d(std::vector<T> &tArray){
@@ -108,6 +120,92 @@ static double get_time(){
     time_ms = (t1.tv_sec) * 1000 + t1.tv_usec / 1000;
 #endif
     return time_ms;
+}
+
+/*Keyboard hit handling*/
+
+static void cooked(void)
+{
+	tcsetattr(0, TCSANOW, &g_old_kbd_mode);
+}
+
+static void raw(void)
+{
+	static char init;
+/**/
+	struct termios new_kbd_mode;
+
+	if(init)
+		return;
+/* put keyboard (stdin, actually) in raw, unbuffered mode */
+	tcgetattr(0, &g_old_kbd_mode);
+	memcpy(&new_kbd_mode, &g_old_kbd_mode, sizeof(struct termios));
+	new_kbd_mode.c_lflag &= ~(ICANON | ECHO);
+	new_kbd_mode.c_cc[VTIME] = 0;
+	new_kbd_mode.c_cc[VMIN] = 1;
+	tcsetattr(0, TCSANOW, &new_kbd_mode);
+/* when we exit, go back to normal, "cooked" mode */
+	atexit(cooked);
+
+	init = 1;
+}
+
+static int kbhit()
+{
+	struct timeval timeout;
+	fd_set read_handles;
+	int status;
+
+	raw();
+    /* check stdin (fd 0) for activity */
+	FD_ZERO(&read_handles);
+	FD_SET(0, &read_handles);
+	timeout.tv_sec = timeout.tv_usec = 0;
+	status = select(0 + 1, &read_handles, NULL, NULL, &timeout);
+	if(status < 0)
+	{
+		printf("select() failed in kbhit()\n");
+		exit(1);
+	}
+    return (status);
+}
+
+static int getch(void)
+{
+	unsigned char temp;
+
+	raw();
+    /* stdin = fd 0 */
+	if(read(0, &temp, 1) != 1)
+		return 0;
+	return temp;
+
+}
+
+static void CheckKeyboardCommands(RunControlVars_t* runcontrol){
+    int c=0;
+    if (!kbhit())
+        return;
+
+    c = getch();
+
+    switch(c) {
+        case 'q':
+            runcontrol->quit=1;
+            break;
+        case 'R':
+            runcontrol->restart=1;
+            break;
+        case 's':
+            if (!(runcontrol->start))
+                runcontrol->start=1;
+            else
+                runcontrol->start=0;
+                runcontrol->acquiring=0;
+            break;
+        default:
+            break;
+    }
 }
 
 #endif
